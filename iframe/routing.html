@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeRouting 自动布线</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+            font-size: 12px;
+            background: #F5F5F5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .toolbar {
+            background: #FAFAFA;
+            border-bottom: 1px solid #E0E0E0;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .toolbar-group { display: flex; align-items: center; gap: 6px; }
+        .toolbar-label { color: #666; font-size: 11px; white-space: nowrap; }
+        .toolbar-input {
+            border: 1px solid #D0D0D0;
+            background: #FFF;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: #333;
+            outline: none;
+        }
+        .toolbar-input:focus { border-color: #007AFF; }
+        .toolbar-input-small { width: 60px; text-align: center; }
+        .toolbar-btn {
+            background: #007AFF;
+            border: 1px solid #007AFF;
+            padding: 4px 12px;
+            font-size: 11px;
+            color: #FFF;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .toolbar-btn:hover:not(:disabled) { background: #0066DD; border-color: #0066DD; }
+        .toolbar-btn:active:not(:disabled) { background: #0055CC; }
+        .toolbar-btn:disabled { background: #B0B0B0; border-color: #B0B0B0; cursor: not-allowed; }
+        .toolbar-btn.cancel { background: #FF3B30; border-color: #FF3B30; }
+        .toolbar-btn.cancel:hover:not(:disabled) { background: #E0352B; }
+        .toolbar-separator { width: 1px; height: 20px; background: #D0D0D0; margin: 0 4px; }
+        input[type="checkbox"] { cursor: pointer; }
+        .advanced-panel {
+            width: 100%;
+            background: #F8F8F8;
+            border-top: 1px solid #E0E0E0;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s ease-out;
+        }
+        .advanced-panel.open { max-height: 300px; }
+        .advanced-content {
+            padding: 12px 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px 20px;
+        }
+        .param-group { display: flex; flex-direction: column; gap: 4px; }
+        .param-label { font-size: 11px; color: #666; display: flex; align-items: center; gap: 4px; }
+        .param-help { color: #999; cursor: help; font-size: 10px; }
+        .param-input {
+            border: 1px solid #D0D0D0;
+            background: #FFF;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: #333;
+            outline: none;
+        }
+        .param-input:focus { border-color: #007AFF; }
+        .log-panel {
+            flex: 1;
+            background: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            margin: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .log-header {
+            background: #FAFAFA;
+            border-bottom: 1px solid #E0E0E0;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .log-content {
+            flex: 1;
+            padding: 8px;
+            font-family: 'Consolas', 'SF Mono', 'Monaco', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            overflow-y: auto;
+            background: #FDFDFD;
+        }
+        .log-line { white-space: pre-wrap; word-break: break-all; color: #444; margin-bottom: 2px; }
+        .log-line.info { color: #007AFF; }
+        .log-line.success { color: #34C759; font-weight: 500; }
+        .log-line.error { color: #FF3B30; font-weight: 500; }
+        .log-line.warn { color: #FF9500; }
+        .statusbar {
+            background: #E8E8E8;
+            border-top: 1px solid #D0D0D0;
+            padding: 4px 12px;
+            font-size: 11px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <span class="toolbar-label">最大轮数:</span>
+            <input type="number" class="toolbar-input toolbar-input-small" id="maxPasses" value="100" min="1" max="1000">
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-group">
+            <input type="checkbox" id="enableAdvancedSettings">
+            <span class="toolbar-label" style="cursor: pointer;" onclick="document.getElementById('enableAdvancedSettings').click()">使用高级设置</span>
+        </div>
+        <div class="toolbar-separator"></div>
+        <button class="toolbar-btn" id="btnStart" disabled>开始布线</button>
+        <button class="toolbar-btn cancel" id="btnCancel" disabled>取消</button>
+    </div>
+    <div class="advanced-panel" id="advancedPanel">
+        <div class="advanced-content">
+            <div class="param-group">
+                <label class="param-label">过孔成本 (via_costs) <span class="param-help" title="过孔的成本权重，越高越少使用过孔">ⓘ</span></label>
+                <input type="number" class="param-input" id="viaCosts" value="50" min="1" max="1000">
+            </div>
+            <div class="param-group">
+                <label class="param-label">最大线程数 (max_threads) <span class="param-help" title="并行布线的线程数">ⓘ</span></label>
+                <input type="number" class="param-input" id="maxThreads" value="4" min="1" max="32">
+            </div>
+            <div class="param-group">
+                <label class="param-label">扇出轮数 (fanout_max_passes) <span class="param-help" title="扇出阶段的最大迭代轮数">ⓘ</span></label>
+                <input type="number" class="param-input" id="fanoutMaxPasses" value="20" min="1" max="100">
+            </div>
+            <div class="param-group">
+                <label class="param-label">改进阈值 (improvement_threshold) <span class="param-help" title="控制停止条件">ⓘ</span></label>
+                <input type="number" class="param-input" id="improvementThreshold" value="0" min="0" max="1" step="0.001">
+            </div>
+            <div class="param-group">
+                <label class="param-label">拉紧精度 (trace_pull_tight_accuracy) <span class="param-help" title="走线拉紧的精度">ⓘ</span></label>
+                <input type="number" class="param-input" id="tracePullTightAccuracy" value="500" min="1" max="10000">
+            </div>
+            <div class="param-group">
+                <label class="param-label">撕裂成本 (start_ripup_costs) <span class="param-help" title="撕裂已有走线的起始成本">ⓘ</span></label>
+                <input type="number" class="param-input" id="startRipupCosts" value="100" min="1" max="10000">
+            </div>
+            <div class="param-group">
+                <label class="param-label">自动缩颈 (automatic_neckdown) <span class="param-help" title="自动在狭窄区域缩小走线宽度">ⓘ</span></label>
+                <select class="param-input" id="automaticNeckdown"><option value="true">启用</option><option value="false">禁用</option></select>
+            </div>
+            <div class="param-group">
+                <label class="param-label">允许多种过孔 (allowed_via_types) <span class="param-help" title="允许使用不同类型的过孔">ⓘ</span></label>
+                <select class="param-input" id="allowedViaTypes"><option value="true">允许</option><option value="false">禁止</option></select>
+            </div>
+        </div>
+    </div>
+    <div class="log-panel">
+        <div class="log-header">
+            <span>运行日志</span>
+            <span id="logCount">0 行</span>
+        </div>
+        <div class="log-content" id="logContainer">
+            <div class="log-line info">正在连接到 WebSocket 服务器...</div>
+        </div>
+    </div>
+    <div class="statusbar">
+        <span>FreeRouting 自动布线 | WebSocket: 127.0.0.1:37865</span>
+    </div>
+    <script>
+        const WS_URL = 'ws://127.0.0.1:37865';
+        let ws = null;
+        let isRouting = false;
+        let lineCount = 0;
+        const MAX_LINES = 200;
+
+        const maxPassesEl = document.getElementById('maxPasses');
+        const enableAdvancedSettingsEl = document.getElementById('enableAdvancedSettings');
+        const btnStart = document.getElementById('btnStart');
+        const btnCancel = document.getElementById('btnCancel');
+        const logContainer = document.getElementById('logContainer');
+        const logCountEl = document.getElementById('logCount');
+        const advancedPanel = document.getElementById('advancedPanel');
+        const viaCostsEl = document.getElementById('viaCosts');
+        const maxThreadsEl = document.getElementById('maxThreads');
+        const fanoutMaxPassesEl = document.getElementById('fanoutMaxPasses');
+        const improvementThresholdEl = document.getElementById('improvementThreshold');
+        const tracePullTightAccuracyEl = document.getElementById('tracePullTightAccuracy');
+        const startRipupCostsEl = document.getElementById('startRipupCosts');
+        const automaticNeckdownEl = document.getElementById('automaticNeckdown');
+        const allowedViaTypesEl = document.getElementById('allowedViaTypes');
+
+        function addLog(message, type = '') {
+            if (!message || !message.trim()) return;
+            const lines = message.split('\n');
+            lines.forEach(line => {
+                if (line.trim()) {
+                    const div = document.createElement('div');
+                    div.className = `log-line ${type}`;
+                    div.textContent = line;
+                    logContainer.appendChild(div);
+                    lineCount++;
+                    while (logContainer.children.length > MAX_LINES) {
+                        logContainer.removeChild(logContainer.firstChild);
+                    }
+                }
+            });
+            logCountEl.textContent = `${Math.min(lineCount, MAX_LINES)} 行`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLog() {
+            logContainer.innerHTML = '';
+            lineCount = 0;
+            logCountEl.textContent = '0 行';
+        }
+
+        function setStatus(status, text) {
+            // 状态已移除标题栏显示，仅在日志中记录
+            addLog(`状态: ${text}`, status === 'error' ? 'error' : (status === 'connected' ? 'success' : 'info'));
+        }
+
+        function setRouting(routing) {
+            isRouting = routing;
+            btnStart.disabled = routing || !ws || ws.readyState !== WebSocket.OPEN;
+            btnCancel.disabled = !routing;
+            maxPassesEl.disabled = routing;
+            enableAdvancedSettingsEl.disabled = routing;
+        }
+
+        // 勾选高级设置时显示/隐藏参数面板
+        enableAdvancedSettingsEl.addEventListener('change', () => {
+            if (enableAdvancedSettingsEl.checked) {
+                advancedPanel.classList.add('open');
+            } else {
+                advancedPanel.classList.remove('open');
+            }
+        });
+
+        function collectOptions() {
+            const options = {
+                maxPasses: parseInt(maxPassesEl.value) || 100,
+                enableJlcPostprocess: true  // 默认启用层名转换
+            };
+            if (enableAdvancedSettingsEl.checked) {
+                options.routerSettings = {
+                    via_costs: parseInt(viaCostsEl.value) || 50,
+                    max_threads: parseInt(maxThreadsEl.value) || 4,
+                    fanout_max_passes: parseInt(fanoutMaxPassesEl.value) || 20,
+                    improvement_threshold: parseFloat(improvementThresholdEl.value) || 0,
+                    trace_pull_tight_accuracy: parseInt(tracePullTightAccuracyEl.value) || 500,
+                    start_ripup_costs: parseInt(startRipupCostsEl.value) || 100,
+                    automatic_neckdown: automaticNeckdownEl.value === 'true',
+                    allowed_via_types: allowedViaTypesEl.value === 'true'
+                };
+            }
+            return options;
+        }
+
+        function connectWebSocket() {
+            setStatus('connecting', '连接中...');
+            addLog('正在连接到 WebSocket 服务器...', 'info');
+
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                setStatus('connected', '已连接');
+                addLog('已连接到服务器', 'success');
+                btnStart.disabled = false;
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleServerMessage(msg);
+                } catch (error) {
+                    addLog(`消息解析错误: ${error.message}`, 'error');
+                }
+            };
+
+            ws.onclose = () => {
+                setStatus('disconnected', '已断开');
+                addLog('与服务器断开连接', 'warn');
+                btnStart.disabled = true;
+                setRouting(false);
+                setTimeout(() => {
+                    addLog('尝试重新连接...', 'info');
+                    connectWebSocket();
+                }, 5000);
+            };
+
+            ws.onerror = (error) => {
+                addLog('WebSocket 错误', 'error');
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function handleServerMessage(msg) {
+            switch (msg.type) {
+                case 'log':
+                    addLog(msg.message, msg.level);
+                    break;
+                case 'progress':
+                    addLog(`进度: ${msg.stage} - ${msg.percentage}%`, 'info');
+                    break;
+                case 'realtime_ses':
+                    if (msg.statistics) {
+                        const stats = msg.statistics;
+                        const netsTotal = stats.nets?.total_count || 0;
+                        const tracesTotal = stats.traces?.total_count || 0;
+                        const viasTotal = stats.vias?.total_count || 0;
+                        addLog(`[实时更新] 网络: ${netsTotal} | 走线: ${tracesTotal} | 过孔: ${viasTotal}`, 'info');
+                    }
+                    break;
+                case 'complete':
+                    setRouting(false);
+                    setStatus('connected', '完成');
+                    addLog('布线完成!', 'success');
+                    // 通知扩展布线完成，传递 SES 数据
+                    if (msg.data) {
+                        sendToExtension('complete', { data: msg.data, filename: msg.filename });
+                    }
+                    break;
+                case 'error':
+                    setRouting(false);
+                    setStatus('error', '错误');
+                    addLog(`错误: ${msg.message}`, 'error');
+                    if (msg.details) addLog(msg.details, 'error');
+                    break;
+            }
+        }
+
+        btnStart.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addLog('未连接到服务器', 'error');
+                return;
+            }
+            // 请求扩展获取 DSN 文件
+            clearLog();
+            addLog('正在请求 DSN 文件...', 'info');
+            setRouting(true);
+            setStatus('routing', '布线中...');
+            
+            const options = collectOptions();
+            addLog(`最大轮数: ${options.maxPasses}`, 'info');
+            if (options.routerSettings) {
+                addLog('高级设置已启用', 'info');
+            }
+            
+            // 通知扩展开始布线，请求 DSN 文件
+            sendToExtension('start', { options: options });
+        });
+
+        btnCancel.addEventListener('click', () => {
+            addLog('正在取消布线...', 'warn');
+            setRouting(false);
+            setStatus('connected', '已取消');
+            sendToExtension('cancel', {});
+        });
+
+        // 获取父窗口的 EDA API
+        const parentEda = window.parent.eda;
+        
+        // 订阅来自扩展的消息
+        if (parentEda && parentEda.sys_MessageBus) {
+            parentEda.sys_MessageBus.subscribe('freerouting-dsn', (msg) => {
+                if (msg && msg.data && msg.filename) {
+                    addLog(`DSN 文件: ${msg.filename}`, 'success');
+                    const options = collectOptions();
+                    ws.send(JSON.stringify({
+                        type: 'route',
+                        jobId: `job_${Date.now()}`,
+                        filename: msg.filename,
+                        data: msg.data,
+                        options: options
+                    }));
+                } else {
+                    addLog('获取 DSN 文件失败', 'error');
+                    setRouting(false);
+                    setStatus('error', '错误');
+                }
+            });
+        }
+
+        // 发送消息到扩展
+        function sendToExtension(type, data) {
+            if (parentEda && parentEda.sys_MessageBus) {
+                parentEda.sys_MessageBus.publish('freerouting-iframe', { type, ...data });
+            }
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>

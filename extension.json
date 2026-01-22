@@ -1,0 +1,48 @@
+{
+	"name": "freerouting-intergration",
+	"uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
+	"displayName": "自动布线器",
+	"description": "嘉立创EDA & EasyEDA 专业版扩展 API 开发工具",
+	"version": "2.1.5",
+	"publisher": "JLCEDA <support@lceda.cn>",
+	"engines": {
+		"eda": "^2.3.0"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "extension-store",
+		"url": ""
+	},
+	"categories": "Other",
+	"keywords": [
+		"SDK"
+	],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://pro.lceda.cn",
+	"bugs": "https://lceda.cn/page/feedback?originPage=other",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"pcb": [
+			{
+				"id": "FreeRouting",
+				"title": "FreeRouting",
+				"menuItems": [
+					{
+						"id": "AutoRoute",
+						"title": "自动布线",
+						"registerFn": "autoRoute"
+					},
+					{
+						"id": "AutoRouteCustom",
+						"title": "自动布线(自定义)",
+						"registerFn": "autoRouteCustom"
+					}
+				]
+			}
+		]
+	}
+}
