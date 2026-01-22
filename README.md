@@ -1,5 +1,6 @@
-# FreeRouting 自动布线器
+# FreeRouting 自动布线器集成
 
+通过本扩展你可以直接把PCB文件推送给开源自动布线工具Freerouting，并且不需要手动运行Freerouting，并操作导入导出自动布线文件，实现一键自动布线，为PCB自动布线提供新的选择。
 
 ## 功能特性
 
@@ -10,10 +11,17 @@
 
 ## 使用方法
 
+### 安装方式
+
+1. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到Freerouting，点击安装
+2. 或者下载扩展包eext文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
+3. 安装后点击到已安装列表，点击Freerouting，在配置处开启允许“**外部交互**”和“**在顶部菜单显示**”（不勾选则在高级菜单显示）
+4. 下载Freerouting最新版本V2.2.0及以上，并安装：[Freerouting](https://github.com/freerouting/freerouting/releases)
+
 ### 快速布线
 
 1. 在嘉立创EDA专业版中打开 PCB 文档
-2. 点击菜单 **FreeRouting → 自动布线**
+2. 点击菜单 **FreeRouting → 自动布线**，会提示是否运行打开Freerouting，点击允许，会自动启动Freerouting
 3. 等待布线完成，结果自动导入
 
 ### 自定义布线
@@ -36,3 +44,8 @@
 | 撕裂成本 (start_ripup_costs) | 100 | 撕裂已有走线的起始成本 |
 | 自动缩颈 (automatic_neckdown) | 启用 | 自动在狭窄区域缩小走线宽度 |
 | 允许多种过孔 (allowed_via_types) | 允许 | 允许使用不同类型的过孔 |
+
+
+## 鸣谢
+1. 感谢 [Freerouting](https://github.com/freerouting/freerouting/releases) 项目，感谢andrasfuchs等作者提供的Freerouting API能力
+2. 感谢 Freerouting贡献者 [L1uTongweiNewAccount](https://github.com/L1uTongweiNewAccount) 帮助API的适配
