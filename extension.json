@@ -18,7 +18,7 @@
 		"PCB","Freerouting","AutoRoute","自动布线"
 	],
 	"images": {
-		"logo": "./images/logo.png"
+		"logo": "./images/freerouting.jpg"
 	},
 	"homepage": "https://github.com/easyeda/eext-freerouting-intergration",
 	"bugs": "https://github.com/easyeda/eext-freerouting-intergration/issues",
