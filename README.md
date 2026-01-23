@@ -7,7 +7,7 @@
 - **快速自动布线** - 一键启动，使用优化的默认参数快速完成 PCB 布线
 - **自定义布线** - 通过可视化面板配置布线参数，满足不同设计需求
 - **实时进度反馈** - 布线过程中实时显示进度、统计信息和日志
-- **JLCEDA 层名转换** - 自动将 FreeRouting 层名转换为嘉立创EDA格式
+- **层名转换** - 自动将 FreeRouting 层名转换为嘉立创EDA格式
 
 ## 使用方法
 
@@ -16,7 +16,7 @@
 1. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到Freerouting，点击安装
 2. 或者下载扩展包eext文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
 3. 安装后点击到已安装列表，点击Freerouting，在配置处开启允许“**外部交互**”和“**在顶部菜单显示**”（不勾选则在高级菜单显示）
-4. 下载Freerouting最新版本V2.2.0及以上，并安装：[Freerouting](https://github.com/freerouting/freerouting/releases)
+4. 下载并安装Freerouting最新版本，需V2.2.0及以上。[下载Freerouting](https://github.com/freerouting/freerouting/releases)
 
 ### 快速布线
 
@@ -47,5 +47,5 @@
 
 
 ## 鸣谢
-1. 感谢 [Freerouting](https://github.com/freerouting/freerouting/releases) 项目，感谢andrasfuchs等作者提供的Freerouting API能力
-2. 感谢 Freerouting贡献者 [L1uTongweiNewAccount](https://github.com/L1uTongweiNewAccount) 帮助API的适配
+1. 感谢 [Freerouting项目](https://github.com/freerouting/freerouting/releases) ，感谢[andrasfuchs](https://github.com/andrasfuchs)等作者提供的Freerouting工具及API能力
+2. 感谢 Freerouting贡献者 [L1uTongweiNewAccount](https://github.com/L1uTongweiNewAccount) 帮助Freerouting API的适配
