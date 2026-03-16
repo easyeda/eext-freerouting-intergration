@@ -21,7 +21,7 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 ### 安装方式 / Installation
 
 1. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到Freerouting，点击安装 
-2. Open JLCEDA Professional, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
+2. Open EasyEDA Pro, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
 3. 或者下载扩展包eext文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入 
 4. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file
 5. 安装后点击到已安装列表，点击Freerouting，在配置处开启允许"**外部交互**"和"**在顶部菜单显示**"（不勾选则在高级菜单显示） 
@@ -32,7 +32,7 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 ### 快速布线 / Quick Routing
 
 1. 在嘉立创EDA专业版中打开 PCB 文档 
-2. Open a PCB document in EasyEDA Professional
+2. Open a PCB document in EasyEDA Pro
 3. 点击菜单 **FreeRouting → 自动布线**，会提示是否运行打开Freerouting，点击允许，会自动启动Freerouting 
 4. Click menu **FreeRouting → Auto Route**, you will be prompted to open FreeRouting, click Allow, and FreeRouting will launch automatically
 5. 等待布线完成，结果自动导入 
