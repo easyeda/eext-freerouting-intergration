@@ -2,11 +2,9 @@
  * 入口文件
  */
 import * as extensionConfig from '../extension.json';
-import { FreeRoutingRouter } from './router/FreeRoutingRouter';
+import { FreeRoutingRouter, RouteResult } from './router/FreeRoutingRouter';
 import { QUICK_ROUTE_OPTIONS, RoutingOptions } from './types';
 import { showInfo, showSuccess, showError, t } from './utils/toast';
-import { SESImporter } from './importer/SESImporter';
-import { fileToBase64 } from './utils/base64';
 
 const IFRAME_ID = 'freerouting-config';
 let iframeMessageTask: { cancel: () => void } | null = null;
@@ -27,6 +25,18 @@ function logToPanel(message: string, type: 'info' | 'warn' | 'error' = 'info'): 
 	eda.sys_Log.add(`[FreeRouting] ${message}`, type as any);
 }
 
+function pushLogToIFrame(message: string, level = 'info'): void {
+	try {
+		eda.sys_MessageBus.publish('freerouting-log', { type: 'log', message, level });
+	} catch (_) {}
+}
+
+function pushDoneToIFrame(message: string, level = 'success'): void {
+	try {
+		eda.sys_MessageBus.publish('freerouting-log', { type: 'done', message, level });
+	} catch (_) {}
+}
+
 function formatDuration(ms: number): string {
 	const s = Math.floor(ms / 1000);
 	if (s < 60) return `${s}${t('s')}`;
@@ -44,7 +54,7 @@ export function about(): void {
 	);
 }
 
-export async function autoRoute(): Promise<void> {
+async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: string) => void, showProgress = true): Promise<void> {
 	if (getActiveRouter()?.isActive()) {
 		showError(t('Routing in progress, please stop current routing first'));
 		return;
@@ -56,45 +66,54 @@ export async function autoRoute(): Promise<void> {
 	routeStartTime = Date.now();
 	logToPanel(`${t('Routing started')} - ${new Date(routeStartTime).toLocaleTimeString()}`);
 
-	eda.sys_LoadingAndProgressBar.showProgressBar(0, t('Starting auto-routing...'));
+	if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(0, t('Starting auto-routing...'));
 
 	const router = new FreeRoutingRouter(
 		(progress) => {
-			eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, progress.message);
+			if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, progress.message);
+			logFn?.(progress.message, 'info');
 		},
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
+			logFn?.(message, level);
 		},
 	);
 
 	setActiveRouter(router);
 
 	router
-		.route(QUICK_ROUTE_OPTIONS)
-		.then((result) => {
+		.route(options)
+		.then((result: RouteResult) => {
 			const duration = Date.now() - routeStartTime;
-			eda.sys_LoadingAndProgressBar.destroyProgressBar();
+			if (showProgress) eda.sys_LoadingAndProgressBar.destroyProgressBar();
 			if (result.success) {
 				showSuccess(t('Auto-routing completed!'));
 				logToPanel(`${t('Routing completed')} - ${new Date().toLocaleTimeString()} | ${t('Duration: ')}${formatDuration(duration)}`);
+				const doneMsg = `${t('Routing completed')} | ${t('Duration: ')}${formatDuration(duration)}`;
 				if (result.statistics) {
 					const s = result.statistics;
-					logToPanel(`${t('Result: routed nets ')}${s.routed_net_count ?? s.nets?.total_count ?? 0}${t(' vias ')}${s.via_count ?? s.vias?.total_count ?? 0}${t(' traces ')}${s.traces?.total_count ?? 0}`);
+					const statsMsg = `${t('Result: routed nets ')}${s.routed_net_count ?? s.nets?.total_count ?? 0}${t(' vias ')}${s.via_count ?? s.vias?.total_count ?? 0}${t(' traces ')}${s.traces?.total_count ?? 0}`;
+					logToPanel(statsMsg);
+					logFn?.(statsMsg, 'info');
 				}
+				pushDoneToIFrame(doneMsg);
 			} else {
 				showInfo(t('Routing finished'));
 				logToPanel(`${t('Routing ended - incomplete')} - ${new Date().toLocaleTimeString()} | ${t('Duration: ')}${formatDuration(duration)}`);
+				pushDoneToIFrame(`${t('Routing ended - incomplete')} | ${t('Duration: ')}${formatDuration(duration)}`, 'warn');
 			}
 		})
-		.catch((error) => {
+		.catch((error: Error) => {
 			const duration = Date.now() - routeStartTime;
-			eda.sys_LoadingAndProgressBar.destroyProgressBar();
-			const message = error instanceof Error ? error.message : String(error);
+			if (showProgress) eda.sys_LoadingAndProgressBar.destroyProgressBar();
+			const message = error.message || String(error);
 			if (message !== '布线已取消') {
 				showError(`${t('Routing failed: ')}${message}`);
 				logToPanel(`${t('Routing failed')} - ${t('Duration: ')}${formatDuration(duration)} | ${message}`, 'error');
+				pushDoneToIFrame(`${t('Routing failed')}: ${message}`, 'error');
 			} else {
 				logToPanel(`${t('Routing stopped')} - ${t('Duration: ')}${formatDuration(duration)}`);
+				pushDoneToIFrame(`${t('Routing stopped')} | ${t('Duration: ')}${formatDuration(duration)}`, 'warn');
 			}
 		})
 		.finally(async () => {
@@ -102,6 +121,10 @@ export async function autoRoute(): Promise<void> {
 			await eda.pcb_Document.startCalculatingRatline();
 			await eda.pcb_Layer.setLayerVisible(57 as any);
 		});
+}
+
+export async function autoRoute(): Promise<void> {
+	await runRoute(QUICK_ROUTE_OPTIONS);
 }
 
 export function stopRoute(): void {
@@ -147,89 +170,28 @@ function setupIFrameMessageListener(): void {
 
 	iframeMessageTask = eda.sys_MessageBus.subscribe(
 		'freerouting-iframe',
-		async (message: { type: string; options?: RoutingOptions; data?: string; filename?: string }) => {
+		async (message: { type: string; options?: RoutingOptions & { autoDrc?: boolean } }) => {
 			switch (message.type) {
-				case 'start':
-					await handleIFrameStart();
+				case 'start-custom':
+					if (message.options) {
+						const opts: RoutingOptions = {
+							maxPasses: message.options.maxPasses,
+							enableJlcPostprocess: message.options.enableJlcPostprocess ?? true,
+							routerSettings: message.options.routerSettings,
+						};
+						const autoDrc = message.options.autoDrc !== false;
+						if (!autoDrc) {
+							opts.skipDrc = true;
+						}
+						await runRoute(opts, pushLogToIFrame, false);
+					}
 					break;
-				case 'complete':
-					await handleIFrameComplete(message.data, message.filename);
-					break;
-				case 'preview':
-					await handleIFramePreview(message.data, message.filename);
-					break;
-				case 'cancel':
+				case 'stop':
+					stopRoute();
 					break;
 			}
 		},
 	);
-}
-
-async function handleIFrameStart(): Promise<void> {
-	try {
-		const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
-		if (!dsnFile) {
-			eda.sys_MessageBus.publish('freerouting-dsn', { error: t('Failed to get DSN file, please make sure a PCB document is open') });
-			showError(t('Failed to get DSN file, please make sure a PCB document is open'));
-			return;
-		}
-
-		const dsnBase64 = await fileToBase64(dsnFile);
-		eda.sys_MessageBus.publish('freerouting-dsn', {
-			data: dsnBase64,
-			filename: dsnFile.name,
-		});
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		eda.sys_MessageBus.publish('freerouting-dsn', { error: message });
-		showError(`${t('Failed to get DSN file: ')}${message}`);
-	}
-}
-
-async function collectRouteIds(): Promise<{ lineIds: string[]; arcIds: string[]; viaIds: string[] }> {
-	const lineIds = await eda.pcb_PrimitiveLine.getAllPrimitiveId(undefined, undefined, false);
-	const arcIds = await eda.pcb_PrimitiveArc.getAllPrimitiveId(undefined, undefined, false);
-	const viaIds = await eda.pcb_PrimitiveVia.getAllPrimitiveId(undefined, false);
-	return { lineIds, arcIds, viaIds };
-}
-
-async function deleteOldPrimitives(snapshot: { lineIds: string[]; arcIds: string[]; viaIds: string[] }): Promise<void> {
-	if (snapshot.lineIds.length) await eda.pcb_PrimitiveLine.delete(snapshot.lineIds);
-	if (snapshot.arcIds.length) await eda.pcb_PrimitiveArc.delete(snapshot.arcIds);
-	if (snapshot.viaIds.length) await eda.pcb_PrimitiveVia.delete(snapshot.viaIds);
-}
-
-async function handleIFramePreview(data?: string, filename?: string): Promise<void> {
-	if (!data) return;
-	try {
-		await deleteOldPrimitives(await collectRouteIds());
-		const sesFilename = filename || 'routing_result.ses';
-		await SESImporter.import(data, sesFilename);
-	} catch (error) {
-		console.warn('[FreeRouting] preview import failed:', error);
-	}
-}
-
-async function handleIFrameComplete(data?: string, filename?: string): Promise<void> {
-	if (!data) {
-		showError(t('No SES data received'));
-		return;
-	}
-
-	try {
-		await deleteOldPrimitives(await collectRouteIds());
-		const sesFilename = filename || 'routing_result.ses';
-		const success = await SESImporter.import(data, sesFilename);
-
-		if (success) {
-			showSuccess(t('Auto-routing completed!'));
-		} else {
-			showError(t('SES file import failed'));
-		}
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		showError(`${t('Import failed: ')}${message}`);
-	}
 }
 
 function cleanupIFrameResources(): void {

@@ -24,8 +24,6 @@ export interface RouterSettings {
 	via_costs: number;
 	/** 最大线程数 (默认: 4) */
 	max_threads: number;
-	/** 扇出轮数 (默认: 20) */
-	fanout_max_passes: number;
 	/** 改进阈值 (默认: 0) */
 	improvement_threshold: number;
 	/** 拉紧精度 (默认: 500) */
@@ -46,6 +44,8 @@ export interface RoutingOptions {
 	maxPasses: number;
 	/** 启用 JLCEDA 层名转换 */
 	enableJlcPostprocess: boolean;
+	/** 跳过 DRC 检查 */
+	skipDrc?: boolean;
 	/** 高级路由器设置 (可选) */
 	routerSettings?: RouterSettings;
 }
@@ -177,7 +177,6 @@ export interface ExtensionMessage {
 export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
 	via_costs: 50,
 	max_threads: 4,
-	fanout_max_passes: 20,
 	improvement_threshold: 0,
 	trace_pull_tight_accuracy: 500,
 	start_ripup_costs: 100,
@@ -211,6 +210,6 @@ export const CUSTOM_ROUTE_DEFAULT_OPTIONS: RoutingOptions = {
 export const POLL_INTERVAL = 2000;
 
 /**
- * 实时预览间隔 (每隔多少次轮询获取一次中间结果)
+ * 实时预览最小间隔 (毫秒)
  */
-export const PREVIEW_INTERVAL = 5;
+export const PREVIEW_INTERVAL = 6000;

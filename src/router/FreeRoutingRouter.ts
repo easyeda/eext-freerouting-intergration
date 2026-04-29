@@ -113,9 +113,11 @@ export class FreeRoutingRouter {
 				const success = await SESImporter.import(output.data, filename);
 				if (success) {
 					this.onLog?.('SES 文件导入成功', 'success');
-					this.onLog?.('正在执行 DRC 检查...', 'info');
-					await eda.pcb_Drc.check(true, true, false);
-					this.onLog?.('DRC 检查完成', 'success');
+					if (!options.skipDrc) {
+						this.onLog?.('正在执行 DRC 检查...', 'info');
+						await eda.pcb_Drc.check(true, true, false);
+						this.onLog?.('DRC 检查完成', 'success');
+					}
 					return { success: true, statistics: output.statistics };
 				} else {
 					this.onLog?.('SES 文件导入失败', 'error');
@@ -143,6 +145,7 @@ export class FreeRoutingRouter {
 			let pollCount = 0;
 			let lastStage = '';
 			let lastPass = 0;
+			let lastPreviewTime = 0;
 
 			this.pollTimer = setInterval(async () => {
 				if (this.cancelled) {
@@ -188,8 +191,10 @@ export class FreeRoutingRouter {
 						});
 					}
 
-					// 实时预览
-					if (pollCount % PREVIEW_INTERVAL === 0 && status.state === 'RUNNING') {
+					// 实时预览（基于时间间隔）
+					const now = Date.now();
+					if ((now - lastPreviewTime) >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
+						lastPreviewTime = now;
 						try {
 							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);
 							if (partial && partial.data) {

@@ -1,3 +1,5 @@
 {
-	"About...": "About..."
+	"直接自动布线": "Auto Route",
+	"自定义自动布线...": "Custom Auto Route...",
+	"停止布线": "Stop Routing"
 }
