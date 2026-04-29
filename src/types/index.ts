@@ -5,14 +5,24 @@
 // ==================== API 配置 ====================
 
 /**
- * FreeRouting REST API 基础地址 (通过本地代理)
+ * FreeRouting REST API 基础地址
  */
-export const API_BASE_URL = 'http://127.0.0.1:37863/v1';
+export const API_BASE_URL = 'http://127.0.0.1:37864/v1';
 
 /**
- * FreeRouting 本地 Profile ID (本地 API 认证用，任意固定 UUID 即可)
+ * FreeRouting URL Scheme 启动地址
  */
-export const FR_PROFILE_ID = '00000000-0000-0000-0000-ea51eda00001';
+export const FREEROUTING_LAUNCH_URL = 'freerouting://open?--gui.enabled=false&--api_server.enabled=true&--api_server.idle_timeout=300&--api_server.authentication.enabled=false';
+
+/**
+ * 健康检查轮询间隔 (毫秒)
+ */
+export const HEALTH_CHECK_INTERVAL = 2000;
+
+/**
+ * 健康检查最大重试次数 (~60s)
+ */
+export const HEALTH_CHECK_MAX_RETRIES = 30;
 
 // ==================== 布线选项 ====================
 

@@ -57,5 +57,11 @@
 	"[Preview] routed: ": "[Preview] routed: ",
 	" | vias: ": " | vias: ",
 	"Stopping routing...2": "Stopping routing...",
-	"Custom Auto Route": "Custom Auto Route"
+	"Custom Auto Route": "Custom Auto Route",
+	"Checking FreeRouting service...": "Checking FreeRouting service...",
+	"FreeRouting service detected": "FreeRouting service detected",
+	"FreeRouting not detected, launching...": "FreeRouting not detected, launching...",
+	"Waiting for FreeRouting to start...": "Waiting for FreeRouting to start...",
+	"FreeRouting started successfully": "FreeRouting started successfully",
+	"FreeRouting failed to start, please install FreeRouting": "FreeRouting failed to start, please install FreeRouting"
 }

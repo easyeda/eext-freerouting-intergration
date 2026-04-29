@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自动布线(自定义)</title>
+    <title>FreeRouting</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; overflow: hidden; }
@@ -226,7 +226,7 @@
             document.title = t('statusbar_text');
         }
 
-        (async function detectLang() {
+        (function detectLangThenInit() {
             var retries = 0;
             function tryDetect() {
                 var eda = getEda();
@@ -237,9 +237,12 @@
                             T = i18n[lang];
                             applyI18n();
                         }
-                    }).catch(function() {});
+                        initMessageBus();
+                    }).catch(function() { initMessageBus(); });
                 } else if (++retries < 20) {
                     setTimeout(tryDetect, 200);
+                } else {
+                    initMessageBus();
                 }
             }
             tryDetect();
@@ -364,14 +367,16 @@
             return true;
         }
 
-        if (!bindLog()) {
-            var retries = 0;
-            var retryTimer = setInterval(function() {
-                if (bindLog() || ++retries > 10) {
-                    clearInterval(retryTimer);
-                    if (!logBound) log(t('eda_failed'), 'error');
-                }
-            }, 500);
+        function initMessageBus() {
+            if (!bindLog()) {
+                var retries = 0;
+                var retryTimer = setInterval(function() {
+                    if (bindLog() || ++retries > 10) {
+                        clearInterval(retryTimer);
+                        if (!logBound) log(t('eda_failed'), 'error');
+                    }
+                }, 500);
+            }
         }
     })();
     </script>

@@ -13,6 +13,7 @@
 - **停止布线** - 支持随时停止布线，保留当前已有的布线结果
 - **自动 DRC** - 布线完成后可自动执行设计规则检查
 - **层名转换** - 自动将 FreeRouting 层名转换为嘉立创EDA格式
+- **自动启动** - 自动检测 FreeRouting 服务，未运行时通过 URL Scheme 自动唤起
 
 ## 注意事项
 
@@ -31,40 +32,16 @@
 
 4. 下载并安装Freerouting最新版本，需V2.2.0及以上。[下载Freerouting](https://github.com/freerouting/freerouting/releases)
 
-### 安装 Java 25 运行环境
-
-FreeRouting 2.2.0 自带的精简 JRE 缺少 API 服务所需的模块，需要安装完整的 Java 25 JRE。
-
-**自动安装：**
-
-双击运行 `install-java.bat`，会自动下载并安装 Temurin JRE 25 到 `%LOCALAPPDATA%\freerouting\jre-25\` 目录。
-
-**手动安装：**
-
-1. 下载 [Temurin JRE 25](https://adoptium.net/temurin/releases/?version=25)（选择 Windows x64 JRE zip 包）
-2. 解压到 `%LOCALAPPDATA%\freerouting\jre-25\`（即 `C:\Users\<用户名>\AppData\Local\freerouting\jre-25\`）
-3. 确认 `%LOCALAPPDATA%\freerouting\jre-25\bin\java.exe` 存在
-
-### 启动 FreeRouting 服务
-
-需要安装 [Node.js](https://nodejs.org/)（用于运行 CORS 代理）。
-
-双击运行 `start-freerouting.bat`，会自动启动：
-1. FreeRouting API 服务（端口 37864，无 GUI 模式）
-2. CORS 代理（端口 37863，自动注入认证 header）
-
-关闭窗口即停止所有服务。
-
 ### 快速布线
 
-1. 先运行 `start-freerouting.bat` 启动服务
-2. 在嘉立创EDA专业版中打开 PCB 文档
-3. 点击菜单 **FreeRouting → 自动布线**
+1. 在嘉立创EDA专业版中打开 PCB 文档
+2. 点击菜单 **FreeRouting → 直接自动布线**
+3. 扩展会自动检测 FreeRouting 服务是否运行，如未运行会自动唤起 FreeRouting（首次可能需要允许浏览器打开 FreeRouting）
 4. 等待布线完成，结果自动导入。布线过程中会显示进度条，可通过 **FreeRouting → 停止布线** 随时停止
 
 ### 自定义布线
 
-1. 点击菜单 **FreeRouting → 自动布线(自定义)...**
+1. 点击菜单 **FreeRouting → 自定义自动布线...**
 2. 在弹出的面板中，左侧配置布线参数，右侧查看运行日志
 
 ![自定义布线面板](images/setting.jpg)

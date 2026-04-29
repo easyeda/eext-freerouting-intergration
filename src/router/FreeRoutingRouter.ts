@@ -5,7 +5,7 @@
 
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
-import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
+import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics, FREEROUTING_LAUNCH_URL, HEALTH_CHECK_INTERVAL, HEALTH_CHECK_MAX_RETRIES } from '../types';
 import { fileToBase64 } from '../utils/base64';
 import { t } from '../utils/toast';
 
@@ -57,6 +57,8 @@ export class FreeRoutingRouter {
 		this.cancelled = false;
 
 		try {
+			await this.ensureServiceRunning();
+
 			this.onLog?.(t('Getting DSN file...'), 'info');
 			const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
 			if (!dsnFile) {
@@ -237,5 +239,29 @@ export class FreeRoutingRouter {
 
 	isActive(): boolean {
 		return this.isRouting;
+	}
+
+	private async ensureServiceRunning(): Promise<void> {
+		this.onLog?.(t('Checking FreeRouting service...'), 'info');
+
+		if (await FreeRoutingAPI.healthCheck()) {
+			this.onLog?.(t('FreeRouting service detected'), 'success');
+			return;
+		}
+
+		this.onLog?.(t('FreeRouting not detected, launching...'), 'info');
+		eda.sys_Window.open(FREEROUTING_LAUNCH_URL, '_self' as any);
+
+		for (let i = 0; i < HEALTH_CHECK_MAX_RETRIES; i++) {
+			if (this.cancelled) throw new Error('布线已取消');
+			await new Promise((r) => setTimeout(r, HEALTH_CHECK_INTERVAL));
+			this.onLog?.(t('Waiting for FreeRouting to start...'), 'info');
+			if (await FreeRoutingAPI.healthCheck()) {
+				this.onLog?.(t('FreeRouting started successfully'), 'success');
+				return;
+			}
+		}
+
+		throw new Error(t('FreeRouting failed to start, please install FreeRouting'));
 	}
 }
