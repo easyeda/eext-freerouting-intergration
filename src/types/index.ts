@@ -189,7 +189,7 @@ export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
  * 快速布线默认选项
  */
 export const QUICK_ROUTE_OPTIONS: RoutingOptions = {
-	maxPasses: 30,
+	maxPasses: 50,
 	enableJlcPostprocess: true,
 	routerSettings: {
 		...DEFAULT_ROUTER_SETTINGS,

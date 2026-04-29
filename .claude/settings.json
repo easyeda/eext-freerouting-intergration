@@ -22,7 +22,14 @@
       "Bash(curl -s -v -X OPTIONS http://127.0.0.1:37864/v1/sessions/create -H 'Origin: https://pro.lceda.cn' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: Content-Type,Authorization,Freerouting-Profile-ID,Freerouting-Environment-Host')",
       "Bash(curl -s -X POST http://127.0.0.1:37864/v1/sessions/create -H 'Content-Type: application/json' -H 'Authorization: Bearer 00000000-0000-0000-0000-ea51eda00001')",
       "Bash(xxd \"d:/教程/easyeda-docs/github-eext/eext-freerouting-intergration/extension.json\")",
-      "Bash(taskkill //f //im node.exe)"
+      "Bash(taskkill //f //im node.exe)",
+      "Bash(export PATH=\"/tmp/jdk-25.0.2+10-jre/bin:$PATH\")",
+      "Bash(curl -s http://127.0.0.1:37864/v1/system/status)",
+      "Bash(curl -s http://127.0.0.1:37863/v1/sessions/list)",
+      "Bash(curl -s http://127.0.0.1:37863/v1/jobs/list/87f5b729-ef3a-45d5-bf8f-dfac601231bc)",
+      "Bash(git status *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

@@ -108,10 +108,9 @@ export class FreeRoutingRouter {
 
 				this.onLog?.('正在导入最终结果...', 'info');
 				await eda.pcb_Document.startCalculatingRatline();
-				const oldPrimitives = await collectRouteIds();
+				await deletePrimitives(await collectRouteIds());
 				const filename = output.filename || 'routing_result.ses';
 				const success = await SESImporter.import(output.data, filename);
-				await deletePrimitives(oldPrimitives);
 				if (success) {
 					this.onLog?.('SES 文件导入成功', 'success');
 					this.onLog?.('正在执行 DRC 检查...', 'info');
@@ -166,7 +165,8 @@ export class FreeRoutingRouter {
 
 					const currentStage = `${status.stage || ''}_${status.state}`;
 					const currentPass = status.current_pass || 0;
-					const percentage = maxPasses > 0 ? Math.min(Math.round((currentPass / maxPasses) * 100), 99) : 0;
+					const cappedPass = Math.min(currentPass, maxPasses - 1);
+					const percentage = maxPasses > 1 ? Math.round((cappedPass / maxPasses) * 100) : 0;
 
 					const stageMap: Record<string, string> = {
 						'IDLE': eda.sys_I18n.text('Idle') || 'Idle',
@@ -194,10 +194,9 @@ export class FreeRoutingRouter {
 							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);
 							if (partial && partial.data) {
 								this.onLog?.('正在更新实时预览...', 'info');
-								const oldPreview = await collectRouteIds();
+								await deletePrimitives(await collectRouteIds());
 								const filename = partial.filename || dsnFilename.replace(/\.dsn$/i, '.ses');
 								await SESImporter.import(partial.data, filename);
-								await deletePrimitives(oldPreview);
 								if (partial.statistics) {
 									const s = partial.statistics;
 									this.onLog?.(`[预览] 已布线: ${s.routed_net_count ?? 0} | 过孔: ${s.via_count ?? 0}`, 'info');

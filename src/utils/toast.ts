@@ -6,8 +6,8 @@ function t(key: string): string {
 	return eda.sys_I18n.text(key) || key;
 }
 
-export function showInfo(message: string, persistent = false): void {
-	eda.sys_ToastMessage.showMessage(message, 'info', persistent ? 0 : undefined);
+export function showInfo(message: string, timer?: number): void {
+	eda.sys_ToastMessage.showMessage(message, 'info', timer);
 }
 
 export function showSuccess(message: string): void {
