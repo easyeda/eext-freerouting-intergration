@@ -3,8 +3,8 @@
 	"uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
 	"displayName": "Freerouting",
 	"description": "Freerouting自动布线器集成工具，可一键自动启动Freerouting自动完成布线数据对接",
-	"version": "1.1.1",
-	"publisher": "JLCEDA",
+	"version": "1.2.0",
+	"publisher": "EasyEDA",
 	"engines": {
 		"eda": "^3.2.0"
 	},
@@ -40,6 +40,11 @@
 						"id": "AutoRouteCustom",
 						"title": "自动布线(自定义)...",
 						"registerFn": "autoRouteCustom"
+					},
+					{
+						"id": "StopRoute",
+						"title": "停止布线",
+						"registerFn": "stopRoute"
 					}
 				]
 			}

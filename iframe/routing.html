@@ -134,7 +134,7 @@
             <span class="toolbar-label" style="cursor: pointer;" onclick="document.getElementById('enableAdvancedSettings').click()">使用高级设置</span>
         </div>
         <div class="toolbar-separator"></div>
-        <button class="toolbar-btn" id="btnStart" disabled>开始布线</button>
+        <button class="toolbar-btn" id="btnStart">开始布线</button>
         <button class="toolbar-btn cancel" id="btnCancel" disabled>取消</button>
     </div>
     <div class="advanced-panel" id="advancedPanel">
@@ -178,17 +178,22 @@
             <span>运行日志</span>
             <span id="logCount">0 行</span>
         </div>
-        <div class="log-content" id="logContainer">
-            <div class="log-line info">正在连接到 WebSocket 服务器...</div>
-        </div>
+        <div class="log-content" id="logContainer"></div>
     </div>
     <div class="statusbar">
-        <span>FreeRouting 自动布线 | WebSocket: 127.0.0.1:37865</span>
+        <span id="statusText">FreeRouting 自动布线 | REST API: 127.0.0.1:37864</span>
     </div>
     <script>
-        const WS_URL = 'ws://127.0.0.1:37865';
-        let ws = null;
+        function getParentEda() { return window.parent && window.parent.eda; }
+        const API_BASE = 'http://127.0.0.1:37863/v1';
+        const FR_PROFILE_ID = '00000000-0000-0000-0000-ea51eda00001';
+        const POLL_INTERVAL = 2000;
+        const PREVIEW_INTERVAL = 5;
+        const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];
+
         let isRouting = false;
+        let cancelled = false;
+        let pollTimer = null;
         let lineCount = 0;
         const MAX_LINES = 200;
 
@@ -199,22 +204,14 @@
         const logContainer = document.getElementById('logContainer');
         const logCountEl = document.getElementById('logCount');
         const advancedPanel = document.getElementById('advancedPanel');
-        const viaCostsEl = document.getElementById('viaCosts');
-        const maxThreadsEl = document.getElementById('maxThreads');
-        const fanoutMaxPassesEl = document.getElementById('fanoutMaxPasses');
-        const improvementThresholdEl = document.getElementById('improvementThreshold');
-        const tracePullTightAccuracyEl = document.getElementById('tracePullTightAccuracy');
-        const startRipupCostsEl = document.getElementById('startRipupCosts');
-        const automaticNeckdownEl = document.getElementById('automaticNeckdown');
-        const allowedViaTypesEl = document.getElementById('allowedViaTypes');
+        const statusText = document.getElementById('statusText');
 
-        function addLog(message, type = '') {
+        function addLog(message, type) {
             if (!message || !message.trim()) return;
-            const lines = message.split('\n');
-            lines.forEach(line => {
+            message.split('\n').forEach(function(line) {
                 if (line.trim()) {
-                    const div = document.createElement('div');
-                    div.className = `log-line ${type}`;
+                    var div = document.createElement('div');
+                    div.className = 'log-line ' + (type || '');
                     div.textContent = line;
                     logContainer.appendChild(div);
                     lineCount++;
@@ -223,7 +220,7 @@
                     }
                 }
             });
-            logCountEl.textContent = `${Math.min(lineCount, MAX_LINES)} 行`;
+            logCountEl.textContent = Math.min(lineCount, MAX_LINES) + ' 行';
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
@@ -233,181 +230,234 @@
             logCountEl.textContent = '0 行';
         }
 
-        function setStatus(status, text) {
-            // 状态已移除标题栏显示，仅在日志中记录
-            addLog(`状态: ${text}`, status === 'error' ? 'error' : (status === 'connected' ? 'success' : 'info'));
-        }
-
         function setRouting(routing) {
             isRouting = routing;
-            btnStart.disabled = routing || !ws || ws.readyState !== WebSocket.OPEN;
+            btnStart.disabled = routing;
             btnCancel.disabled = !routing;
             maxPassesEl.disabled = routing;
             enableAdvancedSettingsEl.disabled = routing;
         }
 
-        // 勾选高级设置时显示/隐藏参数面板
-        enableAdvancedSettingsEl.addEventListener('change', () => {
-            if (enableAdvancedSettingsEl.checked) {
-                advancedPanel.classList.add('open');
-            } else {
-                advancedPanel.classList.remove('open');
-            }
+        enableAdvancedSettingsEl.addEventListener('change', function() {
+            advancedPanel.classList.toggle('open', enableAdvancedSettingsEl.checked);
         });
 
         function collectOptions() {
-            const options = {
+            var options = {
                 maxPasses: parseInt(maxPassesEl.value) || 100,
-                enableJlcPostprocess: true  // 默认启用层名转换
+                enableJlcPostprocess: true
             };
             if (enableAdvancedSettingsEl.checked) {
                 options.routerSettings = {
-                    via_costs: parseInt(viaCostsEl.value) || 50,
-                    max_threads: parseInt(maxThreadsEl.value) || 4,
-                    fanout_max_passes: parseInt(fanoutMaxPassesEl.value) || 20,
-                    improvement_threshold: parseFloat(improvementThresholdEl.value) || 0,
-                    trace_pull_tight_accuracy: parseInt(tracePullTightAccuracyEl.value) || 500,
-                    start_ripup_costs: parseInt(startRipupCostsEl.value) || 100,
-                    automatic_neckdown: automaticNeckdownEl.value === 'true',
-                    allowed_via_types: allowedViaTypesEl.value === 'true'
+                    via_costs: parseInt(document.getElementById('viaCosts').value) || 50,
+                    max_threads: parseInt(document.getElementById('maxThreads').value) || 4,
+                    fanout_max_passes: parseInt(document.getElementById('fanoutMaxPasses').value) || 20,
+                    improvement_threshold: parseFloat(document.getElementById('improvementThreshold').value) || 0,
+                    trace_pull_tight_accuracy: parseInt(document.getElementById('tracePullTightAccuracy').value) || 500,
+                    start_ripup_costs: parseInt(document.getElementById('startRipupCosts').value) || 100,
+                    automatic_neckdown: document.getElementById('automaticNeckdown').value === 'true',
+                    allowed_via_types: document.getElementById('allowedViaTypes').value === 'true'
                 };
             }
             return options;
         }
 
-        function connectWebSocket() {
-            setStatus('connecting', '连接中...');
-            addLog('正在连接到 WebSocket 服务器...', 'info');
-
-            ws = new WebSocket(WS_URL);
-
-            ws.onopen = () => {
-                setStatus('connected', '已连接');
-                addLog('已连接到服务器', 'success');
-                btnStart.disabled = false;
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    handleServerMessage(msg);
-                } catch (error) {
-                    addLog(`消息解析错误: ${error.message}`, 'error');
-                }
-            };
-
-            ws.onclose = () => {
-                setStatus('disconnected', '已断开');
-                addLog('与服务器断开连接', 'warn');
-                btnStart.disabled = true;
-                setRouting(false);
-                setTimeout(() => {
-                    addLog('尝试重新连接...', 'info');
-                    connectWebSocket();
-                }, 5000);
-            };
-
-            ws.onerror = (error) => {
-                addLog('WebSocket 错误', 'error');
-                console.error('WebSocket error:', error);
-            };
+        async function apiRequest(method, path, body) {
+            var url = API_BASE + path;
+            var init = { method: method };
+            if (body) {
+                init.headers = { 'Content-Type': 'application/json' };
+                init.body = JSON.stringify(body);
+            }
+            var res = await fetch(url, init);
+            if (!res.ok) {
+                var text = await res.text().catch(function() { return ''; });
+                throw new Error('API ' + method + ' ' + path + ' failed (' + res.status + '): ' + text);
+            }
+            if (res.status === 204) return null;
+            return res.json();
         }
 
-        function handleServerMessage(msg) {
-            switch (msg.type) {
-                case 'log':
-                    addLog(msg.message, msg.level);
-                    break;
-                case 'progress':
-                    addLog(`进度: ${msg.stage} - ${msg.percentage}%`, 'info');
-                    break;
-                case 'realtime_ses':
-                    if (msg.statistics) {
-                        const stats = msg.statistics;
-                        const netsTotal = stats.nets?.total_count || 0;
-                        const tracesTotal = stats.traces?.total_count || 0;
-                        const viasTotal = stats.vias?.total_count || 0;
-                        addLog(`[实时更新] 网络: ${netsTotal} | 走线: ${tracesTotal} | 过孔: ${viasTotal}`, 'info');
-                    }
-                    break;
-                case 'complete':
-                    setRouting(false);
-                    setStatus('connected', '完成');
-                    addLog('布线完成!', 'success');
-                    // 通知扩展布线完成，传递 SES 数据
-                    if (msg.data) {
-                        sendToExtension('complete', { data: msg.data, filename: msg.filename });
-                    }
-                    break;
-                case 'error':
-                    setRouting(false);
-                    setStatus('error', '错误');
-                    addLog(`错误: ${msg.message}`, 'error');
-                    if (msg.details) addLog(msg.details, 'error');
-                    break;
+        async function checkConnection() {
+            try {
+                await apiRequest('POST', '/sessions/create');
+                addLog('已连接到 FreeRouting API 服务', 'success');
+                statusText.textContent = 'FreeRouting 自动布线 | REST API: 已连接';
+                return true;
+            } catch (e) {
+                addLog('无法连接到 FreeRouting 服务: ' + e.message, 'error');
+                statusText.textContent = 'FreeRouting 自动布线 | REST API: 未连接';
+                return false;
             }
         }
 
-        btnStart.addEventListener('click', () => {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                addLog('未连接到服务器', 'error');
+        async function startRouting(dsnBase64, dsnFilename) {
+            var options = collectOptions();
+            try {
+                // 1. 创建会话
+                addLog('正在创建布线会话...', 'info');
+                var session = await apiRequest('POST', '/sessions/create');
+                addLog('会话已创建: ' + session.id, 'info');
+
+                // 2. 创建任务
+                var jobName = dsnFilename.replace(/\.dsn$/i, '');
+                var job = await apiRequest('POST', '/jobs/enqueue', {
+                    session_id: session.id,
+                    name: jobName,
+                    priority: 'NORMAL'
+                });
+                var jobId = job.id;
+                addLog('任务已创建: ' + jobId, 'info');
+
+                // 3. 设置参数
+                var settings = { max_passes: options.maxPasses };
+                if (options.routerSettings) {
+                    Object.assign(settings, options.routerSettings);
+                    addLog('高级设置已启用', 'info');
+                }
+                addLog('最大轮数: ' + options.maxPasses, 'info');
+                await apiRequest('POST', '/jobs/' + jobId + '/settings', settings);
+
+                if (cancelled) throw new Error('布线已取消');
+
+                // 4. 提交 DSN 文件
+                addLog('正在上传 DSN 文件: ' + dsnFilename, 'info');
+                await apiRequest('POST', '/jobs/' + jobId + '/input', {
+                    filename: dsnFilename,
+                    data: dsnBase64
+                });
+                addLog('DSN 文件上传成功', 'success');
+
+                if (cancelled) throw new Error('布线已取消');
+
+                // 5. 启动布线
+                addLog('正在启动布线...', 'info');
+                await apiRequest('PUT', '/jobs/' + jobId + '/start');
+                addLog('布线已启动', 'success');
+
+                // 6. 轮询进度 + 实时预览
+                var pollCount = 0;
+                pollTimer = setInterval(async function() {
+                    if (cancelled) {
+                        clearInterval(pollTimer);
+                        addLog('布线已停止，保留当前结果', 'warn');
+                        setRouting(false);
+                        return;
+                    }
+                    try {
+                        pollCount++;
+                        var status = await apiRequest('GET', '/jobs/' + jobId);
+                        addLog('状态: ' + status.state + (status.stage ? ' | 阶段: ' + status.stage : ''), 'info');
+
+                        // 实时预览
+                        if (pollCount % PREVIEW_INTERVAL === 0 && status.state === 'RUNNING') {
+                            try {
+                                var partialRes = await fetch(API_BASE + '/jobs/' + jobId + '/output');
+                                if ((partialRes.status === 200 || partialRes.status === 202)) {
+                                    var partial = await partialRes.json();
+                                    if (partial && partial.data) {
+                                        addLog('正在更新实时预览...', 'info');
+                                        sendToExtension('preview', {
+                                            data: partial.data,
+                                            filename: partial.filename || 'routing_result.ses'
+                                        });
+                                        if (partial.statistics) {
+                                            var ps = partial.statistics;
+                                            addLog('[预览] 已布线: ' + (ps.routed_net_count || 0) + ' | 过孔: ' + (ps.via_count || 0), 'info');
+                                        }
+                                    }
+                                }
+                            } catch (previewErr) {
+                                addLog('预览获取失败: ' + previewErr.message, 'warn');
+                            }
+                        }
+
+                        if (TERMINAL_STATES.indexOf(status.state) !== -1) {
+                            clearInterval(pollTimer);
+
+                            if (status.state === 'COMPLETED') {
+                                addLog('布线完成，正在获取最终结果...', 'success');
+                                var output = await apiRequest('GET', '/jobs/' + jobId + '/output');
+
+                                if (output && output.statistics) {
+                                    var s = output.statistics;
+                                    addLog('统计: 已布线网络 ' + (s.routed_net_count || 0) + ' | 过孔 ' + (s.via_count || 0), 'info');
+                                }
+
+                                if (output && output.data) {
+                                    addLog('正在导入最终 SES 文件...', 'info');
+                                    sendToExtension('complete', {
+                                        data: output.data,
+                                        filename: output.filename || 'routing_result.ses'
+                                    });
+                                    addLog('SES 数据已发送到 EasyEDA', 'success');
+                                } else {
+                                    addLog('未获取到输出数据', 'error');
+                                }
+                            } else {
+                                addLog('布线未完成，状态: ' + status.state, 'error');
+                            }
+                            setRouting(false);
+                        }
+                    } catch (err) {
+                        clearInterval(pollTimer);
+                        addLog('轮询错误: ' + err.message, 'error');
+                        setRouting(false);
+                    }
+                }, POLL_INTERVAL);
+
+            } catch (err) {
+                addLog('错误: ' + err.message, 'error');
+                setRouting(false);
+            }
+        }
+
+        btnStart.addEventListener('click', async function() {
+            var connected = await checkConnection();
+            if (!connected) {
+                addLog('请先启动 FreeRouting 服务 (运行 start-freerouting.bat)', 'error');
                 return;
             }
-            // 请求扩展获取 DSN 文件
+
             clearLog();
-            addLog('正在请求 DSN 文件...', 'info');
+            cancelled = false;
             setRouting(true);
-            setStatus('routing', '布线中...');
-            
-            const options = collectOptions();
-            addLog(`最大轮数: ${options.maxPasses}`, 'info');
-            if (options.routerSettings) {
-                addLog('高级设置已启用', 'info');
-            }
-            
-            // 通知扩展开始布线，请求 DSN 文件
-            sendToExtension('start', { options: options });
+            addLog('正在请求 DSN 文件...', 'info');
+            sendToExtension('start', {});
         });
 
-        btnCancel.addEventListener('click', () => {
+        btnCancel.addEventListener('click', function() {
+            cancelled = true;
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
             addLog('正在取消布线...', 'warn');
             setRouting(false);
-            setStatus('connected', '已取消');
             sendToExtension('cancel', {});
         });
 
-        // 获取父窗口的 EDA API
-        const parentEda = window.parent.eda;
-        
-        // 订阅来自扩展的消息
-        if (parentEda && parentEda.sys_MessageBus) {
-            parentEda.sys_MessageBus.subscribe('freerouting-dsn', (msg) => {
+        if (getParentEda() && getParentEda().sys_MessageBus) {
+            getParentEda().sys_MessageBus.subscribe('freerouting-dsn', function(msg) {
                 if (msg && msg.data && msg.filename) {
-                    addLog(`DSN 文件: ${msg.filename}`, 'success');
-                    const options = collectOptions();
-                    ws.send(JSON.stringify({
-                        type: 'route',
-                        jobId: `job_${Date.now()}`,
-                        filename: msg.filename,
-                        data: msg.data,
-                        options: options
-                    }));
+                    addLog('DSN 文件: ' + msg.filename, 'success');
+                    startRouting(msg.data, msg.filename);
                 } else {
-                    addLog('获取 DSN 文件失败', 'error');
+                    addLog('获取 DSN 文件失败' + (msg && msg.error ? ': ' + msg.error : ''), 'error');
                     setRouting(false);
-                    setStatus('error', '错误');
                 }
             });
         }
 
-        // 发送消息到扩展
         function sendToExtension(type, data) {
-            if (parentEda && parentEda.sys_MessageBus) {
-                parentEda.sys_MessageBus.publish('freerouting-iframe', { type, ...data });
+            var eda = getParentEda();
+            if (eda && eda.sys_MessageBus) {
+                eda.sys_MessageBus.publish('freerouting-iframe', Object.assign({ type: type }, data));
             }
         }
 
-        connectWebSocket();
+        // 启动时检查连接
+        checkConnection();
     </script>
 </body>
 </html>

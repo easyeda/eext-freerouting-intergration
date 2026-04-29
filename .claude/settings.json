@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://127.0.0.1:37864/v1/sessions/list -H \"Freerouting-Profile-ID: 8a9c231c-8d2b-4482-99e5-9727a37900fb\")",
+      "Bash(curl -s http://127.0.0.1:37864/v1/system/environment -H \"Freerouting-Profile-ID: 8a9c231c-8d2b-4482-99e5-9727a37900fb\")",
+      "Bash(winget list *)",
+      "Bash(winget install *)",
+      "Bash(export PATH=\"/c/Program Files/Eclipse Adoptium/jre-21.0.10.7-hotspot/bin:$PATH\")",
+      "Bash(java -version)",
+      "Bash(winget search *)",
+      "Bash(curl -sL \"https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -sL \"https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jre_x64_windows_hotspot_25.0.2_10.zip\" -o /tmp/temurin25-jre.zip)",
+      "Read(//tmp/**)",
+      "Bash(unzip -q -o temurin25-jre.zip)",
+      "Bash(ls -d jdk-25*)",
+      "Bash(curl -s -X POST http://127.0.0.1:37864/v1/sessions/create -H 'Content-Type: application/json' -H 'Authorization: Bearer 8a9c231c-8d2b-4482-99e5-9727a37900fb' -H 'Freerouting-Profile-ID: 8a9c231c-8d2b-4482-99e5-9727a37900fb' -H 'User-Agent: EasyEDA/1.0')",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/freerouting/freerouting/master/src/main/java/app/freerouting/api/v1/SessionControllerV1.java\")",
+      "Bash(curl -s -X POST http://127.0.0.1:37864/v1/sessions/create -H 'Content-Type: application/json' -H 'Authorization: Bearer 8a9c231c-8d2b-4482-99e5-9727a37900fb' -H 'Freerouting-Profile-ID: 8a9c231c-8d2b-4482-99e5-9727a37900fb' -H 'Freerouting-Environment-Host: EasyEDA/1.0')",
+      "Bash(taskkill //f //im java.exe)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/freerouting/freerouting/master/src/main/java/app/freerouting/api/ApiServer.java\")",
+      "Bash(curl -s -v -X OPTIONS http://127.0.0.1:37864/v1/sessions/create -H 'Origin: https://pro.lceda.cn' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: Content-Type,Authorization,Freerouting-Profile-ID,Freerouting-Environment-Host')",
+      "Bash(curl -s -X POST http://127.0.0.1:37864/v1/sessions/create -H 'Content-Type: application/json' -H 'Authorization: Bearer 00000000-0000-0000-0000-ea51eda00001')",
+      "Bash(xxd \"d:/教程/easyeda-docs/github-eext/eext-freerouting-intergration/extension.json\")",
+      "Bash(taskkill //f //im node.exe)"
+    ]
+  }
+}

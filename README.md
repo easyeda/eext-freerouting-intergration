@@ -26,17 +26,58 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 4. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file
 5. 安装后点击到已安装列表，点击Freerouting，在配置处开启允许"**外部交互**"和"**在顶部菜单显示**"（不勾选则在高级菜单显示） 
 6. After installation, go to Installed list, click FreeRouting, and enable "**External Interaction**" and "**Show in Top Menu**" in settings (if unchecked, it will show in Advanced menu)
-7. 下载并安装Freerouting最新版本，需V2.2.0(未发布)及以上。[下载Freerouting](https://github.com/freerouting/freerouting/releases ) 
-8. Download and install the latest FreeRouting version (V2.2.0(not release yet) or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases )
+7. 下载并安装Freerouting最新版本，需V2.2.0及以上。[下载Freerouting](https://github.com/freerouting/freerouting/releases ) 
+8. Download and install the latest FreeRouting version (V2.2.0 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases )
+
+### 安装 Java 25 运行环境 / Install Java 25 Runtime
+
+FreeRouting 2.2.0 自带的精简 JRE 缺少 API 服务所需的模块，需要安装完整的 Java 25 JRE。
+
+The bundled JRE in FreeRouting 2.2.0 is missing modules required by the API server. A full Java 25 JRE is needed.
+
+**自动安装 / Auto Install:**
+
+双击运行 `install-java.bat`，会自动下载并安装 Temurin JRE 25 到 `%LOCALAPPDATA%\freerouting\jre-25\` 目录。
+
+Run `install-java.bat`, it will automatically download and install Temurin JRE 25 to `%LOCALAPPDATA%\freerouting\jre-25\`.
+
+**手动安装 / Manual Install:**
+
+1. 下载 [Temurin JRE 25](https://adoptium.net/temurin/releases/?version=25)（选择 Windows x64 JRE zip 包）
+2. Download [Temurin JRE 25](https://adoptium.net/temurin/releases/?version=25) (choose Windows x64 JRE zip)
+3. 解压到 `%LOCALAPPDATA%\freerouting\jre-25\`（即 `C:\Users\<用户名>\AppData\Local\freerouting\jre-25\`）
+4. Extract to `%LOCALAPPDATA%\freerouting\jre-25\` (i.e. `C:\Users\<username>\AppData\Local\freerouting\jre-25\`)
+5. 确认 `%LOCALAPPDATA%\freerouting\jre-25\bin\java.exe` 存在
+6. Verify that `%LOCALAPPDATA%\freerouting\jre-25\bin\java.exe` exists
+
+### 启动 FreeRouting 服务 / Start FreeRouting Service
+
+需要安装 [Node.js](https://nodejs.org/)（用于运行 CORS 代理）。
+
+[Node.js](https://nodejs.org/) is required (for the CORS proxy).
+
+双击运行 `start-freerouting.bat`，会自动启动：
+1. FreeRouting API 服务（端口 37864，无 GUI 模式）
+2. CORS 代理（端口 37863，自动注入认证 header）
+
+关闭窗口即停止所有服务。
+
+Run `start-freerouting.bat`, it will automatically start:
+1. FreeRouting API server (port 37864, headless mode)
+2. CORS proxy (port 37863, auto-injects auth headers)
+
+Close the window to stop all services.
 
 ### 快速布线 / Quick Routing
 
-1. 在嘉立创EDA专业版中打开 PCB 文档 
-2. Open a PCB document in EasyEDA Pro
-3. 点击菜单 **FreeRouting → 自动布线**，会提示是否运行打开Freerouting，点击允许，会自动启动Freerouting 
-4. Click menu **FreeRouting → Auto Route**, you will be prompted to open FreeRouting, click Allow, and FreeRouting will launch automatically
-5. 等待布线完成，结果自动导入 
-6. Wait for routing completion, results will be imported automatically
+1. 先运行 `start-freerouting.bat` 启动服务
+2. Start the service by running `start-freerouting.bat` first
+3. 在嘉立创EDA专业版中打开 PCB 文档 
+4. Open a PCB document in EasyEDA Pro
+5. 点击菜单 **FreeRouting → 自动布线** 
+6. Click menu **FreeRouting → Auto Route**
+7. 等待布线完成，结果自动导入 
+8. Wait for routing completion, results will be imported automatically
 
 ### 自定义布线 / Custom Routing
 

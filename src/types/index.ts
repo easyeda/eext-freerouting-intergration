@@ -2,12 +2,17 @@
  * FreeRouting 自动布线扩展类型定义
  */
 
-// ==================== 连接状态 ====================
+// ==================== API 配置 ====================
 
 /**
- * WebSocket 连接状态
+ * FreeRouting REST API 基础地址 (通过本地代理)
  */
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+export const API_BASE_URL = 'http://127.0.0.1:37863/v1';
+
+/**
+ * FreeRouting 本地 Profile ID (本地 API 认证用，任意固定 UUID 即可)
+ */
+export const FR_PROFILE_ID = '00000000-0000-0000-0000-ea51eda00001';
 
 // ==================== 布线选项 ====================
 
@@ -57,65 +62,82 @@ export interface RoutingProgress {
 	message: string;
 }
 
-// ==================== WebSocket 消息 ====================
+// ==================== REST API 响应类型 ====================
 
 /**
  * 布线统计信息
  */
 export interface RoutingStatistics {
-	nets?: { total_count: number };
-	traces?: { total_count: number };
-	vias?: { total_count: number };
+	layer_count?: number;
+	component_count?: number;
+	total_net_count?: number;
+	unrouted_net_count?: number;
+	routed_net_count?: number;
+	via_count?: number;
 }
 
 /**
- * WebSocket 消息类型
+ * 任务状态
  */
-export type WSMessageType = 'log' | 'progress' | 'realtime_ses' | 'complete' | 'error';
+export type JobState = 'QUEUED' | 'READY_TO_START' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'FAILED' | 'TIMED_OUT';
 
 /**
- * WebSocket 消息日志级别
+ * 任务阶段
  */
-export type WSLogLevel = 'info' | 'warn' | 'error' | 'success';
+export type JobStage = 'IDLE' | 'FANOUT' | 'ROUTING' | 'OPTIMIZING' | 'POSTPROCESSING';
 
 /**
- * WebSocket 接收消息
+ * 创建会话响应
  */
-export interface WSMessage {
-	/** 消息类型 */
-	type: WSMessageType;
-	/** 日志消息内容 */
-	message?: string;
-	/** 日志级别 */
-	level?: WSLogLevel;
-	/** 进度阶段 */
-	stage?: string;
-	/** 进度百分比 */
-	percentage?: number;
-	/** Base64 编码的 SES 数据 */
-	data?: string;
-	/** SES 文件名 */
+export interface SessionResponse {
+	id: string;
+	user_id?: string;
+	host?: string;
+}
+
+/**
+ * 任务响应
+ */
+export interface JobResponse {
+	id: string;
+	session_id: string;
+	name: string;
+	state: JobState;
+	stage?: JobStage;
+	priority?: string;
+	created_at?: string;
+	started_at?: string;
+	router_settings?: RouterSettings;
+	input?: {
+		size?: number;
+		format?: string;
+		filename?: string;
+		statistics?: RoutingStatistics;
+	};
+}
+
+/**
+ * 任务输出响应
+ */
+export interface JobOutputResponse {
+	job_id: string;
+	data: string;
+	size?: number;
+	crc32?: number;
+	format?: string;
 	filename?: string;
-	/** 错误详情 */
-	details?: string;
-	/** 布线统计信息 */
 	statistics?: RoutingStatistics;
 }
 
 /**
- * 布线请求
+ * 系统状态响应
  */
-export interface RoutingRequest {
-	/** 请求类型 */
-	type: 'route';
-	/** 任务 ID */
-	jobId: string;
-	/** DSN 文件名 */
-	filename: string;
-	/** Base64 编码的 DSN 文件内容 */
-	data: string;
-	/** 布线选项 */
-	options: RoutingOptions;
+export interface SystemStatusResponse {
+	status: string;
+	cpu_load?: number;
+	ram_used?: number;
+	ram_available?: number;
+	session_count?: number;
 }
 
 // ==================== IFrame 通信 ====================
@@ -177,11 +199,11 @@ export const CUSTOM_ROUTE_DEFAULT_OPTIONS: RoutingOptions = {
 };
 
 /**
- * WebSocket 服务地址
+ * 进度轮询间隔 (毫秒)
  */
-export const WS_URL = 'ws://127.0.0.1:37865';
+export const POLL_INTERVAL = 2000;
 
 /**
- * WebSocket 连接 ID
+ * 实时预览间隔 (每隔多少次轮询获取一次中间结果)
  */
-export const WS_ID = 'freerouting-ws';
+export const PREVIEW_INTERVAL = 5;

@@ -23,6 +23,9 @@ const IFRAME_ID = 'freerouting-config';
 // MessageBus 订阅任务
 let iframeMessageTask: { cancel: () => void } | null = null;
 
+// 当前活跃的路由器实例
+let activeRouter: FreeRoutingRouter | null = null;
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function activate(_status?: 'onStartupFinished', _arg?: string): void {}
 
@@ -35,24 +38,26 @@ export function about(): void {
 
 /**
  * 快速自动布线
- * 使用默认参数（50轮，启用JLCEDA转换）直接开始布线
+ * 使用默认参数直接开始布线
  */
 export async function autoRoute(): Promise<void> {
+	if (activeRouter?.isActive()) {
+		showError('布线正在进行中，请先停止当前布线');
+		return;
+	}
+
 	showInfo('正在启动自动布线...');
+	await eda.pcb_Document.stopCalculatingRatline();
 
 	const router = new FreeRoutingRouter(
-		// 进度回调
 		(progress) => {
 			console.log(`[FreeRouting] ${progress.stage}: ${progress.percentage}%`);
-			// 显示进度吐司
-			if (progress.stage && progress.percentage !== undefined) {
-				showInfo(`${progress.stage}: ${progress.percentage}%`);
+			if (progress.stage && progress.message) {
+				showInfo(progress.message);
 			}
 		},
-		// 日志回调 - 根据 WebSocket 返回信息显示吐司
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
-			// 根据日志级别显示不同类型的吐司
 			switch (level) {
 				case 'error':
 					showError(message);
@@ -63,31 +68,40 @@ export async function autoRoute(): Promise<void> {
 				case 'warn':
 					showInfo(message);
 					break;
-				// info 级别不显示吐司，避免过多提示
-			}
-		},
-		// 状态回调
-		(status) => {
-			console.log(`[FreeRouting] 连接状态: ${status}`);
-			if (status === 'connected') {
-				showInfo('已连接到 FreeRouting 服务');
-			} else if (status === 'disconnected') {
-				showError('与 FreeRouting 服务断开连接');
 			}
 		},
 	);
+
+	activeRouter = router;
 
 	try {
 		const success = await router.route(QUICK_ROUTE_OPTIONS);
 		if (success) {
 			showSuccess('自动布线完成！');
 		} else {
-			showError('自动布线失败');
+			showInfo('布线已结束');
 		}
 	} catch (error) {
 		console.error('[FreeRouting] 布线错误:', error);
 		const message = error instanceof Error ? error.message : String(error);
-		showError(`布线失败: ${message}`);
+		if (message !== '布线已取消') {
+			showError(`布线失败: ${message}`);
+		}
+	} finally {
+		activeRouter = null;
+		await eda.pcb_Document.startCalculatingRatline();
+	}
+}
+
+/**
+ * 停止布线
+ */
+export async function stopRoute(): Promise<void> {
+	if (activeRouter?.isActive()) {
+		activeRouter.cancel();
+		showInfo('正在停止布线...');
+	} else {
+		showInfo('当前没有正在进行的布线任务');
 	}
 }
 
@@ -96,10 +110,8 @@ export async function autoRoute(): Promise<void> {
  * 打开 IFrame 配置面板，允许用户自定义布线参数
  */
 export async function autoRouteCustom(): Promise<void> {
-	// 先设置 MessageBus 监听
 	setupIFrameMessageListener();
 
-	// 打开 IFrame 配置面板
 	const opened = await eda.sys_IFrame.openIFrame(
 		'./iframe/routing.html',
 		800,
@@ -110,7 +122,6 @@ export async function autoRouteCustom(): Promise<void> {
 			minimizeButton: true,
 			buttonCallbackFn: (button) => {
 				if (button === 'close') {
-					// 关闭时清理资源
 					cleanupIFrameResources();
 				}
 			},
@@ -122,30 +133,12 @@ export async function autoRouteCustom(): Promise<void> {
 	}
 }
 
-export async function testCors(): Promise<void> {
-	// 先设置 MessageBus 监听
-	setupIFrameMessageListener();
-
-	// 打开 IFrame 配置面板
-	const opened = await eda.sys_IFrame.openIFrame(
-		'./iframe/test_cors.html',
-		800,
-		600,
-	);
-
-}
-
-/**
- * 设置 IFrame 消息监听
- */
 function setupIFrameMessageListener(): void {
-	// 先清理之前的监听
 	if (iframeMessageTask) {
 		iframeMessageTask.cancel();
 		iframeMessageTask = null;
 	}
 
-	// 订阅来自 IFrame 的消息
 	iframeMessageTask = eda.sys_MessageBus.subscribe(
 		'freerouting-iframe',
 		async (message: { type: string; options?: RoutingOptions; data?: string; filename?: string }) => {
@@ -160,6 +153,10 @@ function setupIFrameMessageListener(): void {
 					await handleIFrameComplete(message.data, message.filename);
 					break;
 
+				case 'preview':
+					await handleIFramePreview(message.data, message.filename);
+					break;
+
 				case 'cancel':
 					showInfo('布线已取消');
 					break;
@@ -168,15 +165,10 @@ function setupIFrameMessageListener(): void {
 	);
 }
 
-/**
- * 处理 IFrame 开始布线请求
- */
 async function handleIFrameStart(): Promise<void> {
 	try {
 		console.log('[FreeRouting] 正在获取 DSN 文件...');
-
-		// 获取 DSN 文件
-		const dsnFile = await eda.pcb_ManufactureData.getDsnFile();
+		const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
 		if (!dsnFile) {
 			eda.sys_MessageBus.publish('freerouting-dsn', { error: '获取 DSN 文件失败' });
 			showError('获取 DSN 文件失败，请确保已打开 PCB 文档');
@@ -184,11 +176,8 @@ async function handleIFrameStart(): Promise<void> {
 		}
 
 		console.log('[FreeRouting] DSN 文件获取成功:', dsnFile.name);
-
-		// 编码为 Base64
 		const dsnBase64 = await fileToBase64(dsnFile);
 
-		// 发送 DSN 数据到 IFrame
 		eda.sys_MessageBus.publish('freerouting-dsn', {
 			data: dsnBase64,
 			filename: dsnFile.name,
@@ -203,9 +192,29 @@ async function handleIFrameStart(): Promise<void> {
 	}
 }
 
-/**
- * 处理 IFrame 布线完成
- */
+async function clearExistingRoutes(): Promise<void> {
+	const lineIds = await eda.pcb_PrimitiveLine.getAllPrimitiveId(undefined, undefined, false);
+	if (lineIds.length) await eda.pcb_PrimitiveLine.delete(lineIds);
+
+	const arcIds = await eda.pcb_PrimitiveArc.getAllPrimitiveId(undefined, undefined, false);
+	if (arcIds.length) await eda.pcb_PrimitiveArc.delete(arcIds);
+
+	const viaIds = await eda.pcb_PrimitiveVia.getAllPrimitiveId(undefined, false);
+	if (viaIds.length) await eda.pcb_PrimitiveVia.delete(viaIds);
+}
+
+async function handleIFramePreview(data?: string, filename?: string): Promise<void> {
+	if (!data) return;
+	try {
+		console.log('[FreeRouting] 正在更新实时预览...');
+		await clearExistingRoutes();
+		const sesFilename = filename || 'routing_result.ses';
+		await SESImporter.import(data, sesFilename);
+	} catch (error) {
+		console.warn('[FreeRouting] 预览导入失败:', error);
+	}
+}
+
 async function handleIFrameComplete(data?: string, filename?: string): Promise<void> {
 	if (!data) {
 		showError('未收到 SES 数据');
@@ -214,15 +223,14 @@ async function handleIFrameComplete(data?: string, filename?: string): Promise<v
 
 	try {
 		console.log('[FreeRouting] 正在导入 SES 文件...');
+		await clearExistingRoutes();
 		const sesFilename = filename || 'routing_result.ses';
 		const success = await SESImporter.import(data, sesFilename);
 
 		if (success) {
 			showSuccess('自动布线完成！');
-			console.log('[FreeRouting] SES 文件导入成功');
 		} else {
 			showError('SES 文件导入失败');
-			console.error('[FreeRouting] SES 文件导入失败');
 		}
 	} catch (error) {
 		console.error('[FreeRouting] 导入 SES 文件错误:', error);
@@ -231,9 +239,6 @@ async function handleIFrameComplete(data?: string, filename?: string): Promise<v
 	}
 }
 
-/**
- * 清理 IFrame 相关资源
- */
 function cleanupIFrameResources(): void {
 	if (iframeMessageTask) {
 		iframeMessageTask.cancel();
