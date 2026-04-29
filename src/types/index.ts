@@ -74,6 +74,9 @@ export interface RoutingStatistics {
 	unrouted_net_count?: number;
 	routed_net_count?: number;
 	via_count?: number;
+	traces?: { total_count?: number };
+	vias?: { total_count?: number };
+	nets?: { total_count?: number };
 }
 
 /**
@@ -107,7 +110,11 @@ export interface JobResponse {
 	priority?: string;
 	created_at?: string;
 	started_at?: string;
-	router_settings?: RouterSettings;
+	current_pass?: number;
+	router_settings?: {
+		max_passes?: number;
+		[key: string]: unknown;
+	};
 	input?: {
 		size?: number;
 		format?: string;
@@ -182,7 +189,7 @@ export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
  * 快速布线默认选项
  */
 export const QUICK_ROUTE_OPTIONS: RoutingOptions = {
-	maxPasses: 10,
+	maxPasses: 30,
 	enableJlcPostprocess: true,
 	routerSettings: {
 		...DEFAULT_ROUTER_SETTINGS,
