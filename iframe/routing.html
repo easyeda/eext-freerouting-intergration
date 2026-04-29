@@ -227,17 +227,22 @@
         }
 
         (async function detectLang() {
-            try {
+            var retries = 0;
+            function tryDetect() {
                 var eda = getEda();
                 if (eda && eda.sys_I18n) {
-                    var edaLang = await eda.sys_I18n.getCurrentLanguage();
-                    if (edaLang && edaLang.indexOf('zh') === -1) {
-                        lang = 'en';
-                        T = i18n[lang];
-                        applyI18n();
-                    }
+                    eda.sys_I18n.getCurrentLanguage().then(function(edaLang) {
+                        if (edaLang && edaLang.indexOf('zh') === -1) {
+                            lang = 'en';
+                            T = i18n[lang];
+                            applyI18n();
+                        }
+                    }).catch(function() {});
+                } else if (++retries < 20) {
+                    setTimeout(tryDetect, 200);
                 }
-            } catch (e) {}
+            }
+            tryDetect();
         })();
 
         function t(key) { return T[key] || key; }

@@ -29,7 +29,10 @@
       "Bash(curl -s http://127.0.0.1:37863/v1/jobs/list/87f5b729-ef3a-45d5-bf8f-dfac601231bc)",
       "Bash(git status *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(xargs -I{} curl -s \"http://127.0.0.1:37863/v1/jobs/list/{}\")",
+      "Bash(git rm *)",
+      "Read(//c/Users/easyeda/.claude/skills/easyeda-api/references/**)"
     ]
   }
 }

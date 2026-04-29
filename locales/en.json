@@ -56,5 +56,6 @@
 	"Updating preview...": "Updating preview...",
 	"[Preview] routed: ": "[Preview] routed: ",
 	" | vias: ": " | vias: ",
-	"Stopping routing...2": "Stopping routing..."
+	"Stopping routing...2": "Stopping routing...",
+	"Custom Auto Route": "Custom Auto Route"
 }

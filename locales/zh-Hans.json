@@ -56,5 +56,6 @@
 	"Updating preview...": "正在更新实时预览...",
 	"[Preview] routed: ": "[预览] 已布线: ",
 	" | vias: ": " | 过孔: ",
-	"Stopping routing...2": "正在停止布线..."
+	"Stopping routing...2": "正在停止布线...",
+	"Custom Auto Route": "自定义自动布线"
 }

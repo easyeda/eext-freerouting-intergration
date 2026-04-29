@@ -149,12 +149,13 @@ export async function autoRouteCustom(): Promise<void> {
 		{
 			maximizeButton: true,
 			minimizeButton: true,
-			buttonCallbackFn: (button) => {
+			title: t('Custom Auto Route'),
+			buttonCallbackFn: (button: string) => {
 				if (button === 'close') {
 					cleanupIFrameResources();
 				}
 			},
-		},
+		} as any,
 	);
 
 	if (!opened) {
