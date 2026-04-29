@@ -103,57 +103,147 @@
     <div class="main-content">
         <div class="settings-panel">
             <div class="param-group">
-                <label class="param-label">最大轮数 (max_passes) <span class="param-help" title="布线迭代次数">ⓘ</span></label>
+                <label class="param-label" data-i18n="max_passes_label"></label>
                 <input type="number" class="param-input" id="maxPasses" value="100" min="1" max="1000">
             </div>
             <div class="param-group">
-                <label class="param-label">过孔成本 (via_costs) <span class="param-help" title="过孔的成本权重，越高越少使用过孔">ⓘ</span></label>
+                <label class="param-label" data-i18n="via_costs_label"></label>
                 <input type="number" class="param-input" id="viaCosts" value="50" min="1" max="1000">
             </div>
             <div class="param-group">
-                <label class="param-label">最大线程数 (max_threads) <span class="param-help" title="并行布线的线程数">ⓘ</span></label>
+                <label class="param-label" data-i18n="max_threads_label"></label>
                 <input type="number" class="param-input" id="maxThreads" value="4" min="1" max="32">
             </div>
             <div class="param-group">
-                <label class="param-label">改进阈值 (improvement_threshold) <span class="param-help" title="控制停止条件，0 表示完全布线">ⓘ</span></label>
+                <label class="param-label" data-i18n="improvement_threshold_label"></label>
                 <input type="number" class="param-input" id="improvementThreshold" value="0" min="0" max="1" step="0.001">
             </div>
             <div class="param-group">
-                <label class="param-label">拉紧精度 (trace_pull_tight_accuracy) <span class="param-help" title="走线拉紧的精度">ⓘ</span></label>
+                <label class="param-label" data-i18n="trace_pull_tight_label"></label>
                 <input type="number" class="param-input" id="tracePullTightAccuracy" value="500" min="1" max="10000">
             </div>
             <div class="param-group">
-                <label class="param-label">撕裂成本 (start_ripup_costs) <span class="param-help" title="撕裂已有走线的起始成本">ⓘ</span></label>
+                <label class="param-label" data-i18n="start_ripup_label"></label>
                 <input type="number" class="param-input" id="startRipupCosts" value="100" min="1" max="10000">
             </div>
             <div class="param-group">
-                <label class="param-label">自动缩颈 (automatic_neckdown) <span class="param-help" title="自动在狭窄区域缩小走线宽度">ⓘ</span></label>
-                <select class="param-input" id="automaticNeckdown"><option value="true">启用</option><option value="false">禁用</option></select>
+                <label class="param-label" data-i18n="automatic_neckdown_label"></label>
+                <select class="param-input" id="automaticNeckdown"><option value="true" data-i18n-text="enabled"></option><option value="false" data-i18n-text="disabled"></option></select>
             </div>
             <div class="param-group">
-                <label class="param-label">允许多种过孔 (allowed_via_types) <span class="param-help" title="允许使用不同类型的过孔">ⓘ</span></label>
-                <select class="param-input" id="allowedViaTypes"><option value="true">允许</option><option value="false">禁止</option></select>
+                <label class="param-label" data-i18n="allowed_via_types_label"></label>
+                <select class="param-input" id="allowedViaTypes"><option value="true" data-i18n-text="allowed"></option><option value="false" data-i18n-text="forbidden"></option></select>
             </div>
             <div class="param-group">
-                <label class="param-label">完成后自动 DRC <span class="param-help" title="布线完成后自动执行设计规则检查">ⓘ</span></label>
-                <select class="param-input" id="autoDrc"><option value="true">启用</option><option value="false">禁用</option></select>
+                <label class="param-label" data-i18n="auto_drc_label"></label>
+                <select class="param-input" id="autoDrc"><option value="true" data-i18n-text="enabled"></option><option value="false" data-i18n-text="disabled"></option></select>
             </div>
-            <button class="toolbar-btn" id="btnRoute" style="margin-top:auto;">开始布线</button>
+            <button class="toolbar-btn" id="btnRoute" style="margin-top:auto;" data-i18n-text="start_routing"></button>
         </div>
         <div class="log-panel">
             <div class="log-header">
-                <span>运行日志</span>
-                <span id="logCount">0 行</span>
+                <span data-i18n-text="log_title"></span>
+                <span id="logCount">0</span>
             </div>
             <div class="log-content" id="logContainer"></div>
         </div>
     </div>
     <div class="statusbar">
-        <span id="statusText">FreeRouting 自动布线(自定义)</span>
+        <span id="statusText" data-i18n-text="statusbar_text"></span>
     </div>
     <script>
     (function() {
         'use strict';
+
+        var i18n = {
+            zh: {
+                max_passes_label: '最大轮数 (max_passes) <span class="param-help" title="布线迭代次数">ⓘ</span>',
+                via_costs_label: '过孔成本 (via_costs) <span class="param-help" title="过孔的成本权重，越高越少使用过孔">ⓘ</span>',
+                max_threads_label: '最大线程数 (max_threads) <span class="param-help" title="并行布线的线程数">ⓘ</span>',
+                improvement_threshold_label: '改进阈值 (improvement_threshold) <span class="param-help" title="控制停止条件，0 表示完全布线">ⓘ</span>',
+                trace_pull_tight_label: '拉紧精度 (trace_pull_tight_accuracy) <span class="param-help" title="走线拉紧的精度">ⓘ</span>',
+                start_ripup_label: '撕裂成本 (start_ripup_costs) <span class="param-help" title="撕裂已有走线的起始成本">ⓘ</span>',
+                automatic_neckdown_label: '自动缩颈 (automatic_neckdown) <span class="param-help" title="自动在狭窄区域缩小走线宽度">ⓘ</span>',
+                allowed_via_types_label: '允许多种过孔 (allowed_via_types) <span class="param-help" title="允许使用不同类型的过孔">ⓘ</span>',
+                auto_drc_label: '完成后自动 DRC <span class="param-help" title="布线完成后自动执行设计规则检查">ⓘ</span>',
+                enabled: '启用',
+                disabled: '禁用',
+                allowed: '允许',
+                forbidden: '禁止',
+                start_routing: '开始布线',
+                stop_routing: '停止布线',
+                log_title: '运行日志',
+                statusbar_text: 'FreeRouting 自定义自动布线',
+                user_stop: '用户停止布线',
+                send_request: '发送布线请求，最大轮数: ',
+                routing_done: '布线结束',
+                eda_connected: 'EDA MessageBus 已连接',
+                eda_failed: '无法连接 EDA MessageBus，请重新打开面板',
+                dsn_received: '收到 DSN: ',
+                dsn_failed: 'DSN 获取失败',
+                lines: ' 行'
+            },
+            en: {
+                max_passes_label: 'Max Passes (max_passes) <span class="param-help" title="Routing iteration count">ⓘ</span>',
+                via_costs_label: 'Via Cost (via_costs) <span class="param-help" title="Cost weight for vias, higher = fewer vias">ⓘ</span>',
+                max_threads_label: 'Max Threads (max_threads) <span class="param-help" title="Number of threads for parallel routing">ⓘ</span>',
+                improvement_threshold_label: 'Improvement Threshold <span class="param-help" title="Stop condition, 0 = complete routing">ⓘ</span>',
+                trace_pull_tight_label: 'Trace Pull Tight Accuracy <span class="param-help" title="Accuracy for trace pull-tight optimization">ⓘ</span>',
+                start_ripup_label: 'Start Ripup Costs <span class="param-help" title="Starting cost for ripping up existing traces">ⓘ</span>',
+                automatic_neckdown_label: 'Automatic Neckdown <span class="param-help" title="Reduce trace width in narrow areas">ⓘ</span>',
+                allowed_via_types_label: 'Allowed Via Types <span class="param-help" title="Allow using different types of vias">ⓘ</span>',
+                auto_drc_label: 'Auto DRC <span class="param-help" title="Run DRC automatically after routing">ⓘ</span>',
+                enabled: 'Enabled',
+                disabled: 'Disabled',
+                allowed: 'Allowed',
+                forbidden: 'Forbidden',
+                start_routing: 'Start Routing',
+                stop_routing: 'Stop Routing',
+                log_title: 'Log',
+                statusbar_text: 'FreeRouting Custom Auto Route',
+                user_stop: 'User stopped routing',
+                send_request: 'Sending routing request, max passes: ',
+                routing_done: 'Routing finished',
+                eda_connected: 'EDA MessageBus connected',
+                eda_failed: 'Cannot connect EDA MessageBus, please reopen panel',
+                dsn_received: 'DSN received: ',
+                dsn_failed: 'DSN fetch failed',
+                lines: ' lines'
+            }
+        };
+
+        // Detect language from EDA API
+        var lang = 'zh';
+        var T = i18n[lang];
+
+        function applyI18n() {
+            document.querySelectorAll('[data-i18n]').forEach(function(el) {
+                el.innerHTML = t(el.getAttribute('data-i18n'));
+            });
+            document.querySelectorAll('[data-i18n-text]').forEach(function(el) {
+                el.textContent = t(el.getAttribute('data-i18n-text'));
+            });
+            document.title = t('statusbar_text');
+        }
+
+        (async function detectLang() {
+            try {
+                var eda = getEda();
+                if (eda && eda.sys_I18n) {
+                    var edaLang = await eda.sys_I18n.getCurrentLanguage();
+                    if (edaLang && edaLang.indexOf('zh') === -1) {
+                        lang = 'en';
+                        T = i18n[lang];
+                        applyI18n();
+                    }
+                }
+            } catch (e) {}
+        })();
+
+        function t(key) { return T[key] || key; }
+
+        // Apply default i18n
+        applyI18n();
 
         function getEda() {
             try {
@@ -200,20 +290,21 @@
             while (dom.logContainer.children.length > MAX_LOG_LINES) {
                 dom.logContainer.removeChild(dom.logContainer.firstChild);
             }
-            dom.logCount.textContent = logLineCount + ' 行';
+            dom.logCount.textContent = logLineCount + t('lines');
             dom.logContainer.scrollTop = dom.logContainer.scrollHeight;
         }
 
         function clearLog() {
             dom.logContainer.innerHTML = '';
             logLineCount = 0;
-            dom.logCount.textContent = '0 行';
+            dom.logCount.textContent = '0' + t('lines');
         }
 
         function setUI(routing) {
             isRouting = routing;
-            dom.btnRoute.textContent = routing ? '停止布线' : '开始布线';
+            dom.btnRoute.textContent = routing ? t('stop_routing') : t('start_routing');
             dom.btnRoute.className = routing ? 'toolbar-btn cancel' : 'toolbar-btn';
+            if (routing) dsnHandled = false;
         }
 
         function getOptions() {
@@ -237,18 +328,19 @@
             if (isRouting) {
                 setUI(false);
                 sendToExtension('stop', {});
-                log('用户停止布线', 'warn');
+                log(t('user_stop'), 'warn');
             } else {
                 clearLog();
                 setUI(true);
                 var opts = getOptions();
-                log('发送布线请求，最大轮数: ' + opts.maxPasses, 'info');
+                log(t('send_request') + opts.maxPasses, 'info');
                 sendToExtension('start-custom', { options: opts });
             }
         });
 
-        // 接收扩展推送的日志
         var logBound = false;
+        var dsnHandled = false;
+
         function bindLog() {
             if (logBound) return true;
             var eda = getEda();
@@ -259,11 +351,11 @@
                 if (msg && msg.type === 'log') {
                     log(msg.message, msg.level || 'info');
                 } else if (msg && msg.type === 'done') {
-                    log(msg.message || '布线结束', msg.level || 'success');
+                    log(msg.message || t('routing_done'), msg.level || 'success');
                     setUI(false);
                 }
             });
-            log('EDA MessageBus 已连接', 'success');
+            log(t('eda_connected'), 'success');
             return true;
         }
 
@@ -272,7 +364,7 @@
             var retryTimer = setInterval(function() {
                 if (bindLog() || ++retries > 10) {
                     clearInterval(retryTimer);
-                    if (!logBound) log('无法连接 EDA MessageBus，请重新打开面板', 'error');
+                    if (!logBound) log(t('eda_failed'), 'error');
                 }
             }, 500);
         }

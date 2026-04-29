@@ -7,6 +7,7 @@ import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
 import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
 import { fileToBase64 } from '../utils/base64';
+import { t } from '../utils/toast';
 
 export type ProgressCallback = (progress: RoutingProgress) => void;
 export type LogCallback = (message: string, level: string) => void;
@@ -56,83 +57,83 @@ export class FreeRoutingRouter {
 		this.cancelled = false;
 
 		try {
-			this.onLog?.('正在获取 DSN 文件...', 'info');
+			this.onLog?.(t('Getting DSN file...'), 'info');
 			const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
 			if (!dsnFile) {
-				throw new Error('获取 DSN 文件失败，请确保已打开 PCB 文档');
+				throw new Error(t('Failed to get DSN file, please make sure a PCB document is open'));
 			}
 			const dsnFilename = dsnFile.name;
-			this.onLog?.(`DSN 文件获取成功: ${dsnFilename}`, 'success');
+			this.onLog?.(`${t('DSN file obtained: ')}${dsnFilename}`, 'success');
 
-			this.onLog?.('正在编码 DSN 文件...', 'info');
+			this.onLog?.(t('Encoding DSN file...'), 'info');
 			const dsnBase64 = await fileToBase64(dsnFile);
 
-			this.onLog?.('正在创建布线会话...', 'info');
+			this.onLog?.(t('Creating routing session...'), 'info');
 			const session = await FreeRoutingAPI.createSession();
-			this.onLog?.(`会话已创建: ${session.id}`, 'info');
+			this.onLog?.(`${t('Session created: ')}${session.id}`, 'info');
 
 			if (this.cancelled) throw new Error('布线已取消');
 
 			const jobName = dsnFilename.replace(/\.dsn$/i, '');
 			const job = await FreeRoutingAPI.enqueueJob(session.id, jobName);
 			const jobId = job.id;
-			this.onLog?.(`任务已创建: ${jobId}`, 'info');
+			this.onLog?.(`${t('Job created: ')}${jobId}`, 'info');
 
 			const settings: Record<string, unknown> = { max_passes: options.maxPasses };
 			if (options.routerSettings) {
 				Object.assign(settings, options.routerSettings);
 			}
 			await FreeRoutingAPI.updateSettings(jobId, settings as any);
-			this.onLog?.(`最大轮数: ${options.maxPasses}`, 'info');
+			this.onLog?.(`${t('Max passes: ')}${options.maxPasses}`, 'info');
 
-			this.onLog?.('正在上传 DSN 文件...', 'info');
+			this.onLog?.(t('Uploading DSN file...'), 'info');
 			await FreeRoutingAPI.submitInput(jobId, dsnFilename, dsnBase64);
-			this.onLog?.('DSN 文件上传成功', 'success');
+			this.onLog?.(t('DSN file uploaded'), 'success');
 
 			if (this.cancelled) throw new Error('布线已取消');
 
-			this.onLog?.('正在启动布线...', 'info');
+			this.onLog?.(t('Starting routing...'), 'info');
 			await FreeRoutingAPI.startJob(jobId);
-			this.onLog?.('布线已启动', 'success');
+			this.onLog?.(t('Routing started!'), 'success');
 
 			const finalState = await this.pollProgress(jobId, dsnFilename, options.maxPasses);
 
 			if (finalState === 'COMPLETED') {
-				this.onLog?.('布线完成，正在获取最终结果...', 'success');
+				this.onLog?.(t('Routing complete, fetching results...'), 'success');
 				const output = await FreeRoutingAPI.getJobOutput(jobId);
 
 				if (output.statistics) {
 					const s = output.statistics;
-					this.onLog?.(`统计: 网络 ${s.routed_net_count ?? 0} 已布线 | 过孔 ${s.via_count ?? 0}`, 'info');
+					this.onLog?.(`${t('Stats: nets ')}${s.routed_net_count ?? 0}${t(' routed | vias ')}${s.via_count ?? 0}`, 'info');
 				}
 
-				this.onLog?.('正在导入最终结果...', 'info');
+				this.onLog?.(t('Importing final results...'), 'info');
 				await eda.pcb_Document.startCalculatingRatline();
 				await deletePrimitives(await collectRouteIds());
 				const filename = output.filename || 'routing_result.ses';
 				const success = await SESImporter.import(output.data, filename);
 				if (success) {
-					this.onLog?.('SES 文件导入成功', 'success');
+					this.onLog?.(t('SES file imported'), 'success');
 					if (!options.skipDrc) {
-						this.onLog?.('正在执行 DRC 检查...', 'info');
+						this.onLog?.(t('Running DRC check...'), 'info');
 						await eda.pcb_Drc.check(true, true, false);
-						this.onLog?.('DRC 检查完成', 'success');
+						this.onLog?.(t('DRC check complete'), 'success');
 					}
 					return { success: true, statistics: output.statistics };
 				} else {
-					this.onLog?.('SES 文件导入失败', 'error');
+					this.onLog?.(t('SES import failed'), 'error');
 					return { success: false };
 				}
 			} else if (finalState === 'CANCELLED' && this.cancelled) {
-				this.onLog?.('布线已停止，保留当前结果', 'warn');
+				this.onLog?.(t('Routing stopped, keeping current results'), 'warn');
 				return { success: false };
 			} else {
-				this.onLog?.(`布线未完成，状态: ${finalState}`, 'error');
+				this.onLog?.(`${t('Routing incomplete, state: ')}${finalState}`, 'error');
 				return { success: false };
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			this.onLog?.(`错误: ${message}`, 'error');
+			this.onLog?.(`${t('Error: ')}${message}`, 'error');
 			throw error;
 		} finally {
 			this.cleanup();
@@ -158,7 +159,6 @@ export class FreeRoutingRouter {
 					pollCount++;
 					const status = await FreeRoutingAPI.getJobStatus(jobId);
 
-					// 终态检查放在前面，避免终态时还显示进度
 					if (TERMINAL_STATES.includes(status.state)) {
 						clearInterval(this.pollTimer!);
 						this.onProgress?.({ stage: '', percentage: 100, message: '' });
@@ -172,14 +172,14 @@ export class FreeRoutingRouter {
 					const percentage = maxPasses > 1 ? Math.round((cappedPass / maxPasses) * 100) : 0;
 
 					const stageMap: Record<string, string> = {
-						'IDLE': eda.sys_I18n.text('Idle') || 'Idle',
-						'FANOUT': eda.sys_I18n.text('Fanout') || 'Fanout',
-						'ROUTING': eda.sys_I18n.text('Routing') || 'Routing',
-						'OPTIMIZING': eda.sys_I18n.text('Optimizing') || 'Optimizing',
-						'POSTPROCESSING': eda.sys_I18n.text('Postprocessing') || 'Postprocessing',
+						'IDLE': t('Idle'),
+						'FANOUT': t('Fanout'),
+						'ROUTING': t('Routing'),
+						'OPTIMIZING': t('Optimizing'),
+						'POSTPROCESSING': t('Postprocessing'),
 					};
 					const stageText = stageMap[status.stage || ''] || status.stage || status.state;
-					const passText = eda.sys_I18n.text('Routing: Pass ') || 'Pass ';
+					const passText = t('Routing: Pass ');
 
 					if (currentStage !== lastStage || (currentPass > 0 && currentPass !== lastPass)) {
 						lastStage = currentStage;
@@ -191,24 +191,24 @@ export class FreeRoutingRouter {
 						});
 					}
 
-					// 实时预览（基于时间间隔）
+					// 实时预览
 					const now = Date.now();
 					if ((now - lastPreviewTime) >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
 						lastPreviewTime = now;
 						try {
 							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);
 							if (partial && partial.data) {
-								this.onLog?.('正在更新实时预览...', 'info');
+								this.onLog?.(t('Updating preview...'), 'info');
 								await deletePrimitives(await collectRouteIds());
 								const filename = partial.filename || dsnFilename.replace(/\.dsn$/i, '.ses');
 								await SESImporter.import(partial.data, filename);
 								if (partial.statistics) {
 									const s = partial.statistics;
-									this.onLog?.(`[预览] 已布线: ${s.routed_net_count ?? 0} | 过孔: ${s.via_count ?? 0}`, 'info');
+									this.onLog?.(`${t('[Preview] routed: ')}${s.routed_net_count ?? 0}${t(' | vias: ')}${s.via_count ?? 0}`, 'info');
 								}
 							}
 						} catch (previewErr) {
-							console.warn('[FreeRouting] 预览获取失败:', previewErr);
+							console.warn('[FreeRouting] preview failed:', previewErr);
 						}
 					}
 				} catch (error) {
@@ -222,7 +222,7 @@ export class FreeRoutingRouter {
 	cancel(): void {
 		if (this.isRouting) {
 			this.cancelled = true;
-			this.onLog?.('正在停止布线...', 'warn');
+			this.onLog?.(t('Stopping routing...2'), 'warn');
 		}
 	}
 
