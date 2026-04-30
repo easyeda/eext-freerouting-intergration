@@ -10,11 +10,6 @@
 export const API_BASE_URL = 'http://127.0.0.1:37864/v1';
 
 /**
- * FreeRouting URL Scheme 启动地址
- */
-export const FREEROUTING_LAUNCH_URL = 'freerouting://open?--gui.enabled=false&--api_server.enabled=true&--api_server.idle_timeout=300&--api_server.authentication.enabled=false';
-
-/**
  * 健康检查轮询间隔 (毫秒)
  */
 export const HEALTH_CHECK_INTERVAL = 2000;
@@ -78,15 +73,11 @@ export interface RoutingProgress {
  * 布线统计信息
  */
 export interface RoutingStatistics {
-	layer_count?: number;
-	component_count?: number;
-	total_net_count?: number;
-	unrouted_net_count?: number;
-	routed_net_count?: number;
-	via_count?: number;
+	layers?: { total_count?: number };
+	components?: { total_count?: number };
+	nets?: { total_count?: number };
 	traces?: { total_count?: number };
 	vias?: { total_count?: number };
-	nets?: { total_count?: number };
 }
 
 /**
@@ -126,6 +117,12 @@ export interface JobResponse {
 		[key: string]: unknown;
 	};
 	input?: {
+		size?: number;
+		format?: string;
+		filename?: string;
+		statistics?: RoutingStatistics;
+	};
+	output?: {
 		size?: number;
 		format?: string;
 		filename?: string;

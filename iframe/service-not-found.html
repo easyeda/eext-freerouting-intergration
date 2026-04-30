@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeRouting</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+            font-size: 13px;
+            background: #F5F5F5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .icon { font-size: 40px; margin-bottom: 12px; }
+        .title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #222; }
+        .desc { color: #666; text-align: center; line-height: 1.6; margin-bottom: 12px; max-width: 380px; }
+        .steps { color: #555; text-align: left; line-height: 1.8; margin-bottom: 16px; max-width: 380px; font-size: 12px; }
+        .section-title { font-size: 12px; color: #999; margin-bottom: 8px; }
+        .btn-group { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; justify-content: center; }
+        .btn {
+            padding: 7px 16px;
+            font-size: 12px;
+            border: 1px solid #D0D0D0;
+            background: #FFF;
+            color: #333;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #F0F0F0; border-color: #007AFF; color: #007AFF; }
+        .btn-download {
+            background: #34C759;
+            border-color: #34C759;
+            color: #FFF;
+            padding: 8px 24px;
+            font-size: 13px;
+        }
+        .btn-download:hover { background: #2DB84D; border-color: #2DB84D; color: #FFF; }
+        .btn-primary {
+            background: #007AFF;
+            border-color: #007AFF;
+            color: #FFF;
+            padding: 8px 28px;
+            font-size: 13px;
+        }
+        .btn-primary:hover { background: #0066DD; border-color: #0066DD; color: #FFF; }
+    </style>
+</head>
+<body>
+    <div class="icon">⚠️</div>
+    <div class="title" id="titleText"></div>
+    <div class="desc" id="descText"></div>
+    <div class="steps" id="stepsText"></div>
+    <div class="btn-group" style="margin-bottom:16px;">
+        <button class="btn btn-download" onclick="openDownload()" id="btnDownloadFR"></button>
+        <button class="btn btn-download" onclick="openJDK()" id="btnDownloadJDK"></button>
+    </div>
+    <div class="section-title" id="scriptTitle"></div>
+    <div class="btn-group">
+        <button class="btn" onclick="downloadScript('win')" id="btnWin"></button>
+        <button class="btn" onclick="downloadScript('linux')" id="btnLinux"></button>
+        <button class="btn" onclick="downloadScript('mac')" id="btnMac"></button>
+    </div>
+    <button class="btn btn-primary" onclick="retry()" id="btnRetry"></button>
+
+    <script>
+    (function() {
+        'use strict';
+
+        var i18n = {
+            zh: {
+                title: 'FreeRouting 服务未启动',
+                desc: '请按以下步骤操作：',
+                steps: '1. 下载并安装 FreeRouting (V2.2.0+)\n2. 下载并安装 JDK 25\n3. 下载并运行对应平台的启动脚本\n4. 启动成功后点击"重新检测"',
+                btn_download_fr: '1. 下载 FreeRouting',
+                btn_download_jdk: '2. 下载 JDK 25',
+                script_title: '3. 下载启动脚本：',
+                btn_win: 'Windows (.bat)',
+                btn_linux: 'Linux (.sh)',
+                btn_mac: 'macOS (.sh)',
+                btn_retry: '4. 重新检测'
+            },
+            en: {
+                title: 'FreeRouting Service Not Running',
+                desc: 'Please follow these steps:',
+                steps: '1. Download and install FreeRouting (V2.2.0+)\n2. Download and install JDK 25\n3. Download and run the startup script for your platform\n4. Click "Retry" after the service starts',
+                btn_download_fr: '1. Download FreeRouting',
+                btn_download_jdk: '2. Download JDK 25',
+                script_title: '3. Download startup script:',
+                btn_win: 'Windows (.bat)',
+                btn_linux: 'Linux (.sh)',
+                btn_mac: 'macOS (.sh)',
+                btn_retry: '4. Retry'
+            }
+        };
+
+        var lang = 'zh';
+        var T = i18n[lang];
+
+        function applyI18n() {
+            document.getElementById('titleText').textContent = T.title;
+            document.getElementById('descText').textContent = T.desc;
+            document.getElementById('stepsText').innerText = T.steps;
+            document.getElementById('btnDownloadFR').textContent = T.btn_download_fr;
+            document.getElementById('btnDownloadJDK').textContent = T.btn_download_jdk;
+            document.getElementById('scriptTitle').textContent = T.script_title;
+            document.getElementById('btnWin').textContent = T.btn_win;
+            document.getElementById('btnLinux').textContent = T.btn_linux;
+            document.getElementById('btnMac').textContent = T.btn_mac;
+            document.getElementById('btnRetry').textContent = T.btn_retry;
+            document.title = T.title;
+        }
+
+        applyI18n();
+
+        function getEda() {
+            try {
+                if (window.parent && window.parent.eda) return window.parent.eda;
+                if (window.top && window.top.eda) return window.top.eda;
+                if (window.eda) return window.eda;
+            } catch (e) {}
+            return null;
+        }
+
+        (function detectLang() {
+            var retries = 0;
+            function tryDetect() {
+                var eda = getEda();
+                if (eda && eda.sys_I18n) {
+                    eda.sys_I18n.getCurrentLanguage().then(function(edaLang) {
+                        if (edaLang && edaLang.indexOf('zh') === -1) {
+                            lang = 'en';
+                            T = i18n[lang];
+                            applyI18n();
+                        }
+                    }).catch(function() {});
+                } else if (++retries < 20) {
+                    setTimeout(tryDetect, 200);
+                }
+            }
+            tryDetect();
+        })();
+
+        var SCRIPTS = {};
+        SCRIPTS.win = [
+            '@echo off',
+            'chcp 65001 >nul 2>&1',
+            'setlocal enabledelayedexpansion',
+            '',
+            'echo ============================================',
+            'echo  FreeRouting API Server Launcher (Windows)',
+            'echo ============================================',
+            'echo.',
+            '',
+            'set "FR_JAR="',
+            'if not defined FR_JAR (',
+            '    if exist "%LOCALAPPDATA%\\freerouting\\app\\freerouting-executable.jar" (',
+            '        set "FR_JAR=%LOCALAPPDATA%\\freerouting\\app\\freerouting-executable.jar"',
+            '    )',
+            ')',
+            'if not defined FR_JAR (',
+            '    if exist "%LOCALAPPDATA%\\freerouting\\app" (',
+            '        for /f "delims=" %%f in (\'dir /b /o-n "%LOCALAPPDATA%\\freerouting\\app\\freerouting-*.jar" 2^^^>nul\') do (',
+            '            if not defined FR_JAR set "FR_JAR=%LOCALAPPDATA%\\freerouting\\app\\%%f"',
+            '        )',
+            '    )',
+            ')',
+            'if not defined FR_JAR (',
+            '    if exist "%LOCALAPPDATA%\\freerouting\\lib" (',
+            '        for /f "delims=" %%f in (\'dir /b /o-n "%LOCALAPPDATA%\\freerouting\\lib\\freerouting-*.jar" 2^^^>nul\') do (',
+            '            if not defined FR_JAR set "FR_JAR=%LOCALAPPDATA%\\freerouting\\lib\\%%f"',
+            '        )',
+            '    )',
+            ')',
+            'if not defined FR_JAR (',
+            '    if exist "freerouting-executable.jar" (',
+            '        set "FR_JAR=%CD%\\freerouting-executable.jar"',
+            '    )',
+            ')',
+            'if not defined FR_JAR (',
+            '    for /f "delims=" %%f in (\'dir /b /o-n "freerouting-*.jar" 2^^^>nul\') do (',
+            '        if not defined FR_JAR set "FR_JAR=%CD%\\%%f"',
+            '    )',
+            ')',
+            '',
+            'if not defined FR_JAR (',
+            '    echo [ERROR] FreeRouting jar not found.',
+            '    echo.',
+            '    echo Please install FreeRouting from:',
+            '    echo   https://github.com/freerouting/freerouting/releases',
+            '    echo.',
+            '    pause',
+            '    exit /b 1',
+            ')',
+            '',
+            'echo Found: %FR_JAR%',
+            'echo.',
+            '',
+            'set "JAVA_CMD="',
+            'for /d %%d in ("%PROGRAMFILES%\\Eclipse Adoptium\\jdk-25*" "%PROGRAMFILES%\\Eclipse Adoptium\\jre-25*") do (',
+            '    if not defined JAVA_CMD (',
+            '        if exist "%%d\\bin\\java.exe" set "JAVA_CMD=%%d\\bin\\java.exe"',
+            '    )',
+            ')',
+            'for /d %%d in ("%PROGRAMFILES%\\Java\\jdk-25*" "%PROGRAMFILES%\\Java\\jre-25*") do (',
+            '    if not defined JAVA_CMD (',
+            '        if exist "%%d\\bin\\java.exe" set "JAVA_CMD=%%d\\bin\\java.exe"',
+            '    )',
+            ')',
+            'if not defined JAVA_CMD (',
+            '    if defined JAVA_HOME (',
+            '        if exist "%JAVA_HOME%\\bin\\java.exe" set "JAVA_CMD=%JAVA_HOME%\\bin\\java.exe"',
+            '    )',
+            ')',
+            'if not defined JAVA_CMD (',
+            '    if exist "%LOCALAPPDATA%\\freerouting\\runtime\\bin\\java.exe" (',
+            '        set "JAVA_CMD=%LOCALAPPDATA%\\freerouting\\runtime\\bin\\java.exe"',
+            '        echo [WARN] Using bundled JRE. If API fails, install JDK 25+.',
+            '    )',
+            ')',
+            '',
+            'if not defined JAVA_CMD (',
+            '    echo [ERROR] Java not found.',
+            '    echo.',
+            '    echo FreeRouting API server requires JDK 25+.',
+            '    echo Please install from: https://adoptium.net/temurin/releases/?version=25',
+            '    echo.',
+            '    pause',
+            '    exit /b 1',
+            ')',
+            '',
+            'echo Java: %JAVA_CMD%',
+            'echo.',
+            'echo Starting FreeRouting API server on http://127.0.0.1:37864 ...',
+            'echo Press Ctrl+C to stop.',
+            'echo.',
+            '',
+            '"%JAVA_CMD%" -jar "%FR_JAR%" ^',
+            '    --gui.enabled=false ^',
+            '    --api_server.enabled=true ^',
+            '    --api_server.endpoints=http://127.0.0.1:37864 ^',
+            '    --api_server.authentication.enabled=false ^',
+            '    --api_server.cors_origins=* ^',
+            '    --logging.console.level=ERROR',
+            '',
+            'pause'
+        ].join('\r\n');
+
+        SCRIPTS.linux = [
+            '#!/bin/bash',
+            'echo "============================================"',
+            'echo " FreeRouting API Server Launcher (Linux)"',
+            'echo "============================================"',
+            'echo',
+            '',
+            'FR_JAR=""',
+            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/app" ]; then',
+            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/app"/freerouting-executable.jar 2>/dev/null | head -1)',
+            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t "$HOME/.local/share/freerouting/app"/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/lib" ]; then',
+            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/lib"/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ] && [ -d "/opt/freerouting/lib" ]; then',
+            '    FR_JAR=$(ls -t /opt/freerouting/lib/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ]; then',
+            '    FR_JAR=$(ls -t freerouting-executable.jar 2>/dev/null | head -1)',
+            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            '',
+            'if [ -z "$FR_JAR" ]; then',
+            '    echo "[ERROR] FreeRouting jar not found."',
+            '    echo "Please install from: https://github.com/freerouting/freerouting/releases"',
+            '    exit 1',
+            'fi',
+            '',
+            'echo "Found: $FR_JAR"',
+            'JAVA_CMD=""',
+            'for d in /usr/lib/jvm/java-25-* /usr/lib/jvm/jdk-25* /usr/lib/jvm/temurin-25-*; do',
+            '    [ -z "$JAVA_CMD" ] && [ -x "$d/bin/java" ] && JAVA_CMD="$d/bin/java"',
+            'done',
+            'if [ -z "$JAVA_CMD" ] && [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA_CMD="$JAVA_HOME/bin/java"; fi',
+            'if [ -z "$JAVA_CMD" ] && command -v java &>/dev/null; then JAVA_CMD="java"; fi',
+            'if [ -z "$JAVA_CMD" ] && [ -x "$HOME/.local/share/freerouting/runtime/bin/java" ]; then',
+            '    JAVA_CMD="$HOME/.local/share/freerouting/runtime/bin/java"',
+            '    echo "[WARN] Using bundled JRE. If API fails, install JDK 25+."',
+            'fi',
+            'if [ -z "$JAVA_CMD" ]; then',
+            '    echo "[ERROR] Java not found. Install JDK 25+: https://adoptium.net/temurin/releases/?version=25"',
+            '    exit 1',
+            'fi',
+            '',
+            'echo "Java: $JAVA_CMD"',
+            'echo "Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
+            'echo "Press Ctrl+C to stop."',
+            '"$JAVA_CMD" -jar "$FR_JAR" \\',
+            '    --gui.enabled=false \\',
+            '    --api_server.enabled=true \\',
+            '    --api_server.endpoints=http://127.0.0.1:37864 \\',
+            '    --api_server.authentication.enabled=false \\',
+            '    --api_server.cors_origins=* \\',
+            '    --logging.console.level=ERROR'
+        ].join('\n');
+
+        SCRIPTS.mac = [
+            '#!/bin/bash',
+            'echo "============================================"',
+            'echo " FreeRouting API Server Launcher (macOS)"',
+            'echo "============================================"',
+            'echo',
+            '',
+            'FR_JAR=""',
+            'if [ -d "/Applications/freerouting.app/Contents/app" ]; then',
+            '    FR_JAR=$(ls -t /Applications/freerouting.app/Contents/app/freerouting-executable.jar 2>/dev/null | head -1)',
+            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t /Applications/freerouting.app/Contents/app/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ] && [ -d "$HOME/Applications/freerouting.app/Contents/app" ]; then',
+            '    FR_JAR=$(ls -t "$HOME/Applications/freerouting.app/Contents/app"/freerouting-executable.jar 2>/dev/null | head -1)',
+            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t "$HOME/Applications/freerouting.app/Contents/app"/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/lib" ]; then',
+            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/lib"/freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            'if [ -z "$FR_JAR" ]; then',
+            '    FR_JAR=$(ls -t freerouting-executable.jar 2>/dev/null | head -1)',
+            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t freerouting-*.jar 2>/dev/null | head -1)',
+            'fi',
+            '',
+            'if [ -z "$FR_JAR" ]; then',
+            '    echo "[ERROR] FreeRouting jar not found."',
+            '    echo "Please install from: https://github.com/freerouting/freerouting/releases"',
+            '    exit 1',
+            'fi',
+            '',
+            'echo "Found: $FR_JAR"',
+            'JAVA_CMD=""',
+            'if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA_CMD="$JAVA_HOME/bin/java"; fi',
+            'if [ -z "$JAVA_CMD" ] && [ -x "/usr/libexec/java_home" ]; then',
+            '    JH=$(/usr/libexec/java_home -v 25 2>/dev/null)',
+            '    [ -z "$JH" ] && JH=$(/usr/libexec/java_home 2>/dev/null)',
+            '    [ -n "$JH" ] && [ -x "$JH/bin/java" ] && JAVA_CMD="$JH/bin/java"',
+            'fi',
+            'for d in /Library/Java/JavaVirtualMachines/temurin-25*/Contents/Home; do',
+            '    [ -z "$JAVA_CMD" ] && [ -x "$d/bin/java" ] && JAVA_CMD="$d/bin/java"',
+            'done',
+            'if [ -z "$JAVA_CMD" ] && command -v java &>/dev/null; then JAVA_CMD="java"; fi',
+            'if [ -z "$JAVA_CMD" ]; then',
+            '    for p in "/Applications/freerouting.app/Contents/runtime/Contents/Home/bin/java" \\',
+            '             "$HOME/Applications/freerouting.app/Contents/runtime/Contents/Home/bin/java"; do',
+            '        if [ -x "$p" ]; then JAVA_CMD="$p"; echo "[WARN] Using bundled JRE."; break; fi',
+            '    done',
+            'fi',
+            'if [ -z "$JAVA_CMD" ]; then',
+            '    echo "[ERROR] Java not found. Install JDK 25+: https://adoptium.net/temurin/releases/?version=25"',
+            '    exit 1',
+            'fi',
+            '',
+            'echo "Java: $JAVA_CMD"',
+            'echo "Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
+            'echo "Press Ctrl+C to stop."',
+            '"$JAVA_CMD" -jar "$FR_JAR" \\',
+            '    --gui.enabled=false \\',
+            '    --api_server.enabled=true \\',
+            '    --api_server.endpoints=http://127.0.0.1:37864 \\',
+            '    --api_server.authentication.enabled=false \\',
+            '    --api_server.cors_origins=* \\',
+            '    --logging.console.level=ERROR'
+        ].join('\n');
+
+        var FILENAMES = {
+            win: 'start-freerouting.bat',
+            linux: 'start-freerouting-linux.sh',
+            mac: 'start-freerouting-mac.sh'
+        };
+
+        function triggerDownload(content, filename) {
+            var blob = new Blob([content], { type: 'application/octet-stream' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.downloadScript = function(platform) {
+            var content = SCRIPTS[platform];
+            var filename = FILENAMES[platform];
+            if (content && filename) {
+                triggerDownload(content, filename);
+            }
+        };
+
+        window.openDownload = function() {
+            var eda = getEda();
+            if (eda && eda.sys_Window) {
+                eda.sys_Window.open('https://github.com/freerouting/freerouting/releases');
+            }
+        };
+
+        window.openJDK = function() {
+            var eda = getEda();
+            if (eda && eda.sys_Window) {
+                eda.sys_Window.open('https://adoptium.net/temurin/releases/?version=25');
+            }
+        };
+
+        window.retry = function() {
+            var eda = getEda();
+            if (eda && eda.sys_MessageBus) {
+                eda.sys_MessageBus.publish('freerouting-service-dialog', { type: 'retry' });
+            }
+        };
+    })();
+    </script>
+</body>
+</html>

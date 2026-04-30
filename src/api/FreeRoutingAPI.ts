@@ -9,7 +9,7 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
 	const data = body ? JSON.stringify(body) : undefined;
 	const headers: Record<string, string> = {
 		'Freerouting-Environment-Host': 'EasyEDA/3.2',
-		'Freerouting-Profile-ID': '00000000-0000-0000-0000-ea51eda00001',
+		'Freerouting-Profile-ID': '4c11cc11-75b4-4eaa-96b8-95a71d3611ef',
 	};
 	if (body) {
 		headers['Content-Type'] = 'application/json';
@@ -58,6 +58,10 @@ export class FreeRoutingAPI {
 		return request('PUT', `/jobs/${jobId}/start`);
 	}
 
+	static cancelJob(jobId: string): Promise<void> {
+		return request('PUT', `/jobs/${jobId}/cancel`);
+	}
+
 	static getJobStatus(jobId: string): Promise<JobResponse> {
 		return request('GET', `/jobs/${jobId}`);
 	}
@@ -75,7 +79,7 @@ export class FreeRoutingAPI {
 		const res = await eda.sys_ClientUrl.request(url, 'GET', undefined, {
 			headers: {
 				'Freerouting-Environment-Host': 'EasyEDA/3.2',
-				'Freerouting-Profile-ID': '00000000-0000-0000-0000-ea51eda00001',
+				'Freerouting-Profile-ID': '4c11cc11-75b4-4eaa-96b8-95a71d3611ef',
 			},
 		});
 		if (res.status === 204) return null;

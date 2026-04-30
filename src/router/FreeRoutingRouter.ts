@@ -5,7 +5,7 @@
 
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
-import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics, FREEROUTING_LAUNCH_URL, HEALTH_CHECK_INTERVAL, HEALTH_CHECK_MAX_RETRIES } from '../types';
+import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
 import { fileToBase64 } from '../utils/base64';
 import { t } from '../utils/toast';
 
@@ -40,8 +40,10 @@ export class FreeRoutingRouter {
 	private onProgress?: ProgressCallback;
 	private onLog?: LogCallback;
 	private isRouting = false;
-	private pollTimer?: ReturnType<typeof setInterval>;
 	private cancelled = false;
+	private currentJobId?: string;
+	private pollTimeout?: ReturnType<typeof setTimeout>;
+	private pollResolve?: (state: JobState) => void;
 
 	constructor(onProgress?: ProgressCallback, onLog?: LogCallback) {
 		this.onProgress = onProgress;
@@ -57,7 +59,7 @@ export class FreeRoutingRouter {
 		this.cancelled = false;
 
 		try {
-			await this.ensureServiceRunning();
+			this.checkCancelled();
 
 			this.onLog?.(t('Getting DSN file...'), 'info');
 			const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
@@ -67,47 +69,57 @@ export class FreeRoutingRouter {
 			const dsnFilename = dsnFile.name;
 			this.onLog?.(`${t('DSN file obtained: ')}${dsnFilename}`, 'success');
 
+			this.checkCancelled();
+
 			this.onLog?.(t('Encoding DSN file...'), 'info');
 			const dsnBase64 = await fileToBase64(dsnFile);
+
+			this.checkCancelled();
 
 			this.onLog?.(t('Creating routing session...'), 'info');
 			const session = await FreeRoutingAPI.createSession();
 			this.onLog?.(`${t('Session created: ')}${session.id}`, 'info');
 
-			if (this.cancelled) throw new Error('布线已取消');
+			this.checkCancelled();
 
 			const jobName = dsnFilename.replace(/\.dsn$/i, '');
 			const job = await FreeRoutingAPI.enqueueJob(session.id, jobName);
-			const jobId = job.id;
-			this.onLog?.(`${t('Job created: ')}${jobId}`, 'info');
+			this.currentJobId = job.id;
+			this.onLog?.(`${t('Job created: ')}${job.id}`, 'info');
+
+			this.checkCancelled();
 
 			const settings: Record<string, unknown> = { max_passes: options.maxPasses };
 			if (options.routerSettings) {
 				Object.assign(settings, options.routerSettings);
 			}
-			await FreeRoutingAPI.updateSettings(jobId, settings as any);
+			await FreeRoutingAPI.updateSettings(job.id, settings as any);
 			this.onLog?.(`${t('Max passes: ')}${options.maxPasses}`, 'info');
 
+			this.checkCancelled();
+
 			this.onLog?.(t('Uploading DSN file...'), 'info');
-			await FreeRoutingAPI.submitInput(jobId, dsnFilename, dsnBase64);
+			await FreeRoutingAPI.submitInput(job.id, dsnFilename, dsnBase64);
 			this.onLog?.(t('DSN file uploaded'), 'success');
 
-			if (this.cancelled) throw new Error('布线已取消');
+			this.checkCancelled();
 
 			this.onLog?.(t('Starting routing...'), 'info');
-			await FreeRoutingAPI.startJob(jobId);
+			await FreeRoutingAPI.startJob(job.id);
 			this.onLog?.(t('Routing started!'), 'success');
 
-			const finalState = await this.pollProgress(jobId, dsnFilename, options.maxPasses);
+			const finalState = await this.pollProgress(job.id, dsnFilename, options.maxPasses);
 
 			if (finalState === 'COMPLETED') {
 				this.onLog?.(t('Routing complete, fetching results...'), 'success');
-				const output = await FreeRoutingAPI.getJobOutput(jobId);
 
-				if (output.statistics) {
-					const s = output.statistics;
-					this.onLog?.(`${t('Stats: nets ')}${s.routed_net_count ?? 0}${t(' routed | vias ')}${s.via_count ?? 0}`, 'info');
+				const jobStatus = await FreeRoutingAPI.getJobStatus(job.id);
+				const stats = jobStatus.output?.statistics;
+				if (stats) {
+					this.onLog?.(`${t('Stats: nets ')}${stats.nets?.total_count ?? 0}${t(' routed | vias ')}${stats.vias?.total_count ?? 0}${t(' traces ')}${stats.traces?.total_count ?? 0}`, 'info');
 				}
+
+				const output = await FreeRoutingAPI.getJobOutput(job.id);
 
 				this.onLog?.(t('Importing final results...'), 'info');
 				await eda.pcb_Document.startCalculatingRatline();
@@ -121,12 +133,12 @@ export class FreeRoutingRouter {
 						await eda.pcb_Drc.check(true, true, false);
 						this.onLog?.(t('DRC check complete'), 'success');
 					}
-					return { success: true, statistics: output.statistics };
+					return { success: true, statistics: stats };
 				} else {
 					this.onLog?.(t('SES import failed'), 'error');
 					return { success: false };
 				}
-			} else if (finalState === 'CANCELLED' && this.cancelled) {
+			} else if (this.cancelled) {
 				this.onLog?.(t('Routing stopped, keeping current results'), 'warn');
 				return { success: false };
 			} else {
@@ -135,34 +147,42 @@ export class FreeRoutingRouter {
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			this.onLog?.(`${t('Error: ')}${message}`, 'error');
+			if (message !== '布线已取消') {
+				this.onLog?.(`${t('Error: ')}${message}`, 'error');
+			}
 			throw error;
 		} finally {
 			this.cleanup();
 		}
 	}
 
+	private checkCancelled(): void {
+		if (this.cancelled) throw new Error('布线已取消');
+	}
+
 	private pollProgress(jobId: string, dsnFilename: string, maxPasses: number): Promise<JobState> {
-		return new Promise((resolve, reject) => {
+		return new Promise((resolve) => {
+			this.pollResolve = resolve;
 			const TERMINAL_STATES: JobState[] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];
-			let pollCount = 0;
 			let lastStage = '';
 			let lastPass = 0;
 			let lastPreviewTime = 0;
 
-			this.pollTimer = setInterval(async () => {
+			const poll = async () => {
 				if (this.cancelled) {
-					clearInterval(this.pollTimer!);
 					resolve('CANCELLED');
 					return;
 				}
 
 				try {
-					pollCount++;
 					const status = await FreeRoutingAPI.getJobStatus(jobId);
 
+					if (this.cancelled) {
+						resolve('CANCELLED');
+						return;
+					}
+
 					if (TERMINAL_STATES.includes(status.state)) {
-						clearInterval(this.pollTimer!);
 						this.onProgress?.({ stage: '', percentage: 100, message: '' });
 						resolve(status.state);
 						return;
@@ -193,75 +213,80 @@ export class FreeRoutingRouter {
 						});
 					}
 
-					// 实时预览
+					const outputStats = status.output?.statistics;
+					const inputStats = status.input?.statistics;
+					const totalNets = inputStats?.nets?.total_count ?? 0;
+					const routedNets = outputStats?.nets?.total_count ?? 0;
+					const viaCount = outputStats?.vias?.total_count ?? 0;
+
 					const now = Date.now();
 					if ((now - lastPreviewTime) >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
 						lastPreviewTime = now;
 						try {
 							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);
+							if (this.cancelled) {
+								resolve('CANCELLED');
+								return;
+							}
 							if (partial && partial.data) {
 								this.onLog?.(t('Updating preview...'), 'info');
 								await deletePrimitives(await collectRouteIds());
 								const filename = partial.filename || dsnFilename.replace(/\.dsn$/i, '.ses');
 								await SESImporter.import(partial.data, filename);
-								if (partial.statistics) {
-									const s = partial.statistics;
-									this.onLog?.(`${t('[Preview] routed: ')}${s.routed_net_count ?? 0}${t(' | vias: ')}${s.via_count ?? 0}`, 'info');
-								}
 							}
 						} catch (previewErr) {
 							console.warn('[FreeRouting] preview failed:', previewErr);
 						}
+						this.onLog?.(`${t('[Preview] routed: ')}${routedNets}/${totalNets}${t(' | vias: ')}${viaCount}`, 'info');
 					}
 				} catch (error) {
-					clearInterval(this.pollTimer!);
-					reject(error);
+					if (this.cancelled) {
+						resolve('CANCELLED');
+						return;
+					}
+					console.error('[FreeRouting] poll error:', error);
 				}
-			}, POLL_INTERVAL);
+
+				if (!this.cancelled) {
+					this.pollTimeout = setTimeout(poll, POLL_INTERVAL);
+				} else {
+					resolve('CANCELLED');
+				}
+			};
+
+			this.pollTimeout = setTimeout(poll, POLL_INTERVAL);
 		});
 	}
 
 	cancel(): void {
-		if (this.isRouting) {
-			this.cancelled = true;
-			this.onLog?.(t('Stopping routing...2'), 'warn');
+		if (!this.isRouting || this.cancelled) return;
+		this.cancelled = true;
+		this.isRouting = false;
+		if (this.pollTimeout) {
+			clearTimeout(this.pollTimeout);
+			this.pollTimeout = undefined;
+		}
+		if (this.pollResolve) {
+			this.pollResolve('CANCELLED');
+			this.pollResolve = undefined;
+		}
+		if (this.currentJobId) {
+			FreeRoutingAPI.cancelJob(this.currentJobId).catch(() => {});
 		}
 	}
 
 	private cleanup(): void {
 		this.isRouting = false;
 		this.cancelled = false;
-		if (this.pollTimer) {
-			clearInterval(this.pollTimer);
-			this.pollTimer = undefined;
+		this.currentJobId = undefined;
+		this.pollResolve = undefined;
+		if (this.pollTimeout) {
+			clearTimeout(this.pollTimeout);
+			this.pollTimeout = undefined;
 		}
 	}
 
 	isActive(): boolean {
 		return this.isRouting;
-	}
-
-	private async ensureServiceRunning(): Promise<void> {
-		this.onLog?.(t('Checking FreeRouting service...'), 'info');
-
-		if (await FreeRoutingAPI.healthCheck()) {
-			this.onLog?.(t('FreeRouting service detected'), 'success');
-			return;
-		}
-
-		this.onLog?.(t('FreeRouting not detected, launching...'), 'info');
-		eda.sys_Window.open(FREEROUTING_LAUNCH_URL, '_self' as any);
-
-		for (let i = 0; i < HEALTH_CHECK_MAX_RETRIES; i++) {
-			if (this.cancelled) throw new Error('布线已取消');
-			await new Promise((r) => setTimeout(r, HEALTH_CHECK_INTERVAL));
-			this.onLog?.(t('Waiting for FreeRouting to start...'), 'info');
-			if (await FreeRoutingAPI.healthCheck()) {
-				this.onLog?.(t('FreeRouting started successfully'), 'success');
-				return;
-			}
-		}
-
-		throw new Error(t('FreeRouting failed to start, please install FreeRouting'));
 	}
 }

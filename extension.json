@@ -3,7 +3,7 @@
 	"uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
 	"displayName": "FreeRouting",
 	"description": "FreeRouting自动布线器集成工具，可一键自动启动FreeRouting自动完成布线数据对接",
-	"version": "1.4.0",
+	"version": "1.5.0",
 	"publisher": "EasyEDA",
 	"engines": {
 		"eda": "^3.2.0"

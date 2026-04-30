@@ -3,20 +3,32 @@
  */
 import * as extensionConfig from '../extension.json';
 import { FreeRoutingRouter, RouteResult } from './router/FreeRoutingRouter';
+import { FreeRoutingAPI } from './api/FreeRoutingAPI';
 import { QUICK_ROUTE_OPTIONS, RoutingOptions } from './types';
 import { showInfo, showSuccess, showError, t } from './utils/toast';
 
 const IFRAME_ID = 'freerouting-config';
-let iframeMessageTask: { cancel: () => void } | null = null;
+const SERVICE_DIALOG_ID = 'freerouting-service-dialog';
 
-const ROUTER_KEY = '__freerouting_active_router__';
+const G = globalThis as any;
+const ROUTER_KEY = '__fr_router__';
+const LOCK_KEY = '__fr_lock__';
+const SUB_KEY = '__fr_subscribed__';
+const SVC_SUB_KEY = '__fr_svc_subscribed__';
 
-function getActiveRouter(): FreeRoutingRouter | null {
-	return (globalThis as any)[ROUTER_KEY] || null;
+function getRouter(): FreeRoutingRouter | null {
+	return G[ROUTER_KEY] || null;
 }
-
-function setActiveRouter(router: FreeRoutingRouter | null): void {
-	(globalThis as any)[ROUTER_KEY] = router;
+function setRouter(r: FreeRoutingRouter | null): void {
+	G[ROUTER_KEY] = r;
+}
+function tryLock(): boolean {
+	if (G[LOCK_KEY]) return false;
+	G[LOCK_KEY] = true;
+	return true;
+}
+function unlock(): void {
+	G[LOCK_KEY] = false;
 }
 
 let routeStartTime = 0;
@@ -55,10 +67,17 @@ export function about(): void {
 }
 
 async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: string) => void, showProgress = true): Promise<void> {
-	if (getActiveRouter()?.isActive()) {
-		showError(t('Routing in progress, please stop current routing first'));
+	if (!tryLock()) {
 		return;
 	}
+
+	logFn?.(t('Checking FreeRouting service...'), 'info');
+	if (!(await FreeRoutingAPI.healthCheck())) {
+		unlock();
+		showServiceNotFoundDialog(options, logFn, showProgress);
+		return;
+	}
+	logFn?.(t('FreeRouting service detected'), 'success');
 
 	await eda.pcb_Document.stopCalculatingRatline();
 	await eda.pcb_Layer.setLayerInvisible(57 as any);
@@ -79,7 +98,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 		},
 	);
 
-	setActiveRouter(router);
+	setRouter(router);
 
 	router
 		.route(options)
@@ -92,7 +111,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 				const doneMsg = `${t('Routing completed')} | ${t('Duration: ')}${formatDuration(duration)}`;
 				if (result.statistics) {
 					const s = result.statistics;
-					const statsMsg = `${t('Result: routed nets ')}${s.routed_net_count ?? s.nets?.total_count ?? 0}${t(' vias ')}${s.via_count ?? s.vias?.total_count ?? 0}${t(' traces ')}${s.traces?.total_count ?? 0}`;
+					const statsMsg = `${t('Result: routed nets ')}${s.nets?.total_count ?? 0}${t(' vias ')}${s.vias?.total_count ?? 0}${t(' traces ')}${s.traces?.total_count ?? 0}`;
 					logToPanel(statsMsg);
 					logFn?.(statsMsg, 'info');
 				}
@@ -117,7 +136,8 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 			}
 		})
 		.finally(async () => {
-			setActiveRouter(null);
+			setRouter(null);
+			unlock();
 			await eda.pcb_Document.startCalculatingRatline();
 			await eda.pcb_Layer.setLayerVisible(57 as any);
 		});
@@ -128,20 +148,19 @@ export async function autoRoute(): Promise<void> {
 }
 
 export function stopRoute(): void {
-	const router = getActiveRouter();
+	const router = getRouter();
 	if (router && router.isActive()) {
 		router.cancel();
+		setRouter(null);
+		unlock();
 		eda.sys_LoadingAndProgressBar.destroyProgressBar();
-		showInfo(t('Stopping routing...'));
-	} else {
-		showInfo(t('No active routing task'));
 	}
 }
 
 export async function autoRouteCustom(): Promise<void> {
-	setupIFrameMessageListener();
+	ensureIframeSubscribed();
 
-	const opened = await eda.sys_IFrame.openIFrame(
+	await eda.sys_IFrame.openIFrame(
 		'./iframe/routing.html',
 		800,
 		600,
@@ -152,24 +171,18 @@ export async function autoRouteCustom(): Promise<void> {
 			title: t('Custom Auto Route'),
 			buttonCallbackFn: (button: string) => {
 				if (button === 'close') {
-					cleanupIFrameResources();
+					stopRoute();
 				}
 			},
 		} as any,
 	);
-
-	if (!opened) {
-		cleanupIFrameResources();
-	}
 }
 
-function setupIFrameMessageListener(): void {
-	if (iframeMessageTask) {
-		iframeMessageTask.cancel();
-		iframeMessageTask = null;
-	}
+function ensureIframeSubscribed(): void {
+	if (G[SUB_KEY]) return;
+	G[SUB_KEY] = true;
 
-	iframeMessageTask = eda.sys_MessageBus.subscribe(
+	eda.sys_MessageBus.subscribe(
 		'freerouting-iframe',
 		async (message: { type: string; options?: RoutingOptions & { autoDrc?: boolean } }) => {
 			switch (message.type) {
@@ -195,9 +208,34 @@ function setupIFrameMessageListener(): void {
 	);
 }
 
-function cleanupIFrameResources(): void {
-	if (iframeMessageTask) {
-		iframeMessageTask.cancel();
-		iframeMessageTask = null;
+function showServiceNotFoundDialog(
+	pendingOptions?: RoutingOptions,
+	pendingLogFn?: (msg: string, level: string) => void,
+	pendingShowProgress?: boolean,
+): void {
+	if (!G[SVC_SUB_KEY]) {
+		G[SVC_SUB_KEY] = true;
+		eda.sys_MessageBus.subscribe(
+			'freerouting-service-dialog',
+			async (message: { type: string }) => {
+				if (message.type === 'retry') {
+					eda.sys_IFrame.closeIFrame(SERVICE_DIALOG_ID);
+					const opts = G.__fr_pending_opts__;
+					const logFn = G.__fr_pending_logfn__;
+					const showProg = G.__fr_pending_showprog__;
+					if (opts) {
+						await runRoute(opts, logFn, showProg);
+					}
+				}
+			},
+		);
 	}
+
+	G.__fr_pending_opts__ = pendingOptions;
+	G.__fr_pending_logfn__ = pendingLogFn;
+	G.__fr_pending_showprog__ = pendingShowProgress;
+
+	eda.sys_IFrame.openIFrame('./iframe/service-not-found.html', 450, 520, SERVICE_DIALOG_ID, {
+		title: t('FreeRouting Service Not Running'),
+	} as any);
 }

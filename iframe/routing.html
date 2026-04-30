@@ -75,6 +75,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            cursor: default;
+            user-select: none;
         }
         .log-content {
             flex: 1;
@@ -173,6 +175,7 @@
                 start_routing: '开始布线',
                 stop_routing: '停止布线',
                 log_title: '运行日志',
+                log_copied: '日志已复制到剪切板',
                 statusbar_text: 'FreeRouting 自定义自动布线',
                 user_stop: '用户停止布线',
                 send_request: '发送布线请求，最大轮数: ',
@@ -200,6 +203,7 @@
                 start_routing: 'Start Routing',
                 stop_routing: 'Stop Routing',
                 log_title: 'Log',
+                log_copied: 'Log copied to clipboard',
                 statusbar_text: 'FreeRouting Custom Auto Route',
                 user_stop: 'User stopped routing',
                 send_request: 'Sending routing request, max passes: ',
@@ -265,10 +269,11 @@
         function sendToExtension(type, data) {
             var eda = getEda();
             if (eda && eda.sys_MessageBus) {
-                eda.sys_MessageBus.publish('freerouting-iframe', Object.assign({ type: type }, data));
+                eda.sys_MessageBus.publish('freerouting-iframe', Object.assign({ type: type, _token: sessionToken }, data));
             }
         }
 
+        var sessionToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
         var MAX_LOG_LINES = 500;
         var isRouting = false;
         var logLineCount = 0;
@@ -349,6 +354,22 @@
         var logBound = false;
         var dsnHandled = false;
 
+        document.querySelector('.log-header').addEventListener('dblclick', function() {
+            var lines = dom.logContainer.querySelectorAll('.log-line');
+            var text = [];
+            for (var i = 0; i < lines.length; i++) {
+                text.push(lines[i].textContent);
+            }
+            if (text.length) {
+                navigator.clipboard.writeText(text.join('\n')).then(function() {
+                    var eda = getEda();
+                    if (eda && eda.sys_ToastMessage) {
+                        eda.sys_ToastMessage.showMessage(t('log_copied'), 'success', 2000);
+                    }
+                }).catch(function() {});
+            }
+        });
+
         function bindLog() {
             if (logBound) return true;
             var eda = getEda();
@@ -363,7 +384,6 @@
                     setUI(false);
                 }
             });
-            log(t('eda_connected'), 'success');
             return true;
         }
 

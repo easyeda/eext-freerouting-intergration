@@ -13,7 +13,6 @@
 - **停止布线** - 支持随时停止布线，保留当前已有的布线结果
 - **自动 DRC** - 布线完成后可自动执行设计规则检查
 - **层名转换** - 自动将 FreeRouting 层名转换为嘉立创EDA格式
-- **自动启动** - 自动检测 FreeRouting 服务，未运行时通过 URL Scheme 自动唤起
 
 ## 注意事项
 
@@ -24,19 +23,33 @@
 
 ### 安装方式
 
-1. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到Freerouting，点击安装
-2. 或者下载扩展包eext文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
-3. 安装后点击到已安装列表，点击Freerouting，在配置处开启允许"**外部交互**"（必须开启，否则无法连接 FreeRouting 服务）
+1. 下载并安装 FreeRouting 最新版本（V2.2.0 及以上）。[下载 FreeRouting](https://github.com/freerouting/freerouting/releases)
+2. 下载并安装 JDK 25（FreeRouting API 服务需要）。[下载 JDK 25](https://adoptium.net/temurin/releases/?version=25)
+3. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到 FreeRouting，点击安装
+4. 或者下载扩展包 eext 文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
+5. 安装后点击到已安装列表，点击 FreeRouting，在配置处开启允许"**外部交互**"（必须开启，否则无法连接 FreeRouting 服务）
 
 ![扩展配置](images/ext-setting-cn.jpg)
 
-4. 下载并安装Freerouting最新版本，需V2.2.0及以上。[下载Freerouting](https://github.com/freerouting/freerouting/releases)
+### 启动 FreeRouting 服务
+
+使用前需要先启动 FreeRouting API 服务。根据你的操作系统，运行对应的启动脚本：
+
+| 平台 | 脚本 |
+|------|------|
+| Windows | `scripts/start-freerouting.bat` |
+| Linux | `scripts/start-freerouting-linux.sh` |
+| macOS | `scripts/start-freerouting-mac.sh` |
+
+脚本会自动查找本地安装的 FreeRouting 和 JDK 25，以无 GUI、禁用认证的方式启动 API 服务（端口 37864）。
+
+如果未启动服务，点击布线菜单时扩展会弹窗提示操作步骤，并提供下载链接和启动脚本下载。
 
 ### 快速布线
 
-1. 在嘉立创EDA专业版中打开 PCB 文档
-2. 点击菜单 **FreeRouting → 直接自动布线**
-3. 扩展会自动检测 FreeRouting 服务是否运行，如未运行会自动唤起 FreeRouting（首次可能需要允许浏览器打开 FreeRouting）
+1. 运行启动脚本启动 FreeRouting 服务
+2. 在嘉立创EDA专业版中打开 PCB 文档
+3. 点击菜单 **FreeRouting → 直接自动布线**
 4. 等待布线完成，结果自动导入。布线过程中会显示进度条，可通过 **FreeRouting → 停止布线** 随时停止
 
 ### 自定义布线
