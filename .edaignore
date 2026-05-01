@@ -20,3 +20,5 @@
 debug.log
 /app-offline
 /doc
+/.claude
+/CLAUDE.md

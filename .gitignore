@@ -8,3 +8,5 @@
 debug.log
 /doc
 /app-offline
+/.claude
+/CLAUDE.md
