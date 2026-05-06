@@ -1,3 +1,9 @@
+# 1.6.0
+
+- Windows 版本 FreeRouting 使用 freerouting.exe 直接启动，无需安装 JDK 25
+- 新增 start-freerouting-windows.bat 启动脚本
+- 更新弹窗描述和文档，区分 Windows 和 Linux/Mac 的 JDK 要求
+
 # 1.5.0 
 
 - 支持手动启动 FreeRouting，添加多平台启动脚本（Windows/Mac/Linux）及服务检测
