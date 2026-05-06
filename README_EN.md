@@ -18,12 +18,13 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 
 - **System Requirements** - This extension requires EasyEDA Pro V3.2 or above.
 - **Existing routes are not preserved** - Each time auto-routing is executed, all existing traces and vias (unlocked) on the PCB will be cleared before importing FreeRouting results. To preserve manual routing, lock the corresponding traces and vias first.
+- **Refresh routing progress** - Since FreeRouting does not support the writing of incremental routing results, every time the canvas progress is refreshed, old data is cleared before new results are imported, resulting in a flickering effect on the canvas.
 
 ## Usage
 
 ### Installation
 
-1. Download and install the latest FreeRouting version (V2.2.0 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases)
+1. Download and install the latest FreeRouting version (V2.2.2 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases)
 2. Download and install JDK 25 (required by FreeRouting API server). [Download JDK 25](https://adoptium.net/temurin/releases/?version=25)
 3. Open EasyEDA Pro, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
 4. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file

@@ -1,6 +1,7 @@
 # 1.5.0 
 
 - 支持手动启动 FreeRouting，添加多平台启动脚本（Windows/Mac/Linux）及服务检测
+- 移除通过 URL Scheme 自动启动 FreeRouting
 
 
 # 1.4.0 

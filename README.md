@@ -18,12 +18,13 @@
 
 - **运行环境** - 本扩展仅支持嘉立创EDA专业版 V3.2 及以上版本。
 - **不支持保留已有布线** - 每次执行自动布线时，会清除 PCB 上现有的所有导线和过孔（未锁定的），然后导入 FreeRouting 的布线结果。如需保留部分手动布线，请先锁定对应的导线和过孔。
+- **刷新布线进度** - 因为 FreeRouting 不支持增量布线结果写入，所以每次刷新画布进度是先清理旧数据再导入新结果，会看到画布有闪烁现象。
 
 ## 使用方法
 
 ### 安装方式
 
-1. 下载并安装 FreeRouting 最新版本（V2.2.0 及以上）。[下载 FreeRouting](https://github.com/freerouting/freerouting/releases)
+1. 下载并安装 FreeRouting 最新版本（V2.2.2 及以上）。[下载 FreeRouting](https://github.com/freerouting/freerouting/releases)
 2. 下载并安装 JDK 25（FreeRouting API 服务需要）。[下载 JDK 25](https://adoptium.net/temurin/releases/?version=25)
 3. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到 FreeRouting，点击安装
 4. 或者下载扩展包 eext 文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
