@@ -25,7 +25,7 @@
 ### 安装方式
 
 1. 下载并安装 FreeRouting 最新版本（V2.2.2 及以上）。[下载 FreeRouting](https://github.com/freerouting/freerouting/releases)
-2. 下载并安装 JDK 25（FreeRouting API 服务需要）。[下载 JDK 25](https://adoptium.net/temurin/releases/?version=25)
+2. Linux/Mac: 下载并安装 JDK 25（FreeRouting API 服务需要）。[下载 JDK 25](https://adoptium.net/temurin/releases/?version=25) | Windows: 无需安装 JDK
 3. 打开嘉立创EDA专业版，在顶部菜单：高级 - 扩展管理器，找到 FreeRouting，点击安装
 4. 或者下载扩展包 eext 文件，在顶部菜单：高级 - 扩展管理器 - 导入 eext 文件导入
 5. 安装后点击到已安装列表，点击 FreeRouting，在配置处开启允许"**外部交互**"（必须开启，否则无法连接 FreeRouting 服务）
@@ -38,11 +38,12 @@
 
 | 平台 | 脚本 |
 |------|------|
-| Windows | `scripts/start-freerouting.bat` |
+| Windows | `scripts/start-freerouting-windows.bat` |
 | Linux | `scripts/start-freerouting-linux.sh` |
 | macOS | `scripts/start-freerouting-mac.sh` |
 
-脚本会自动查找本地安装的 FreeRouting 和 JDK 25，以无 GUI、禁用认证的方式启动 API 服务（端口 37864）。
+- Windows: 直接运行 `.bat` 脚本，无需安装 JDK
+- Linux/macOS: 脚本会自动查找本地安装的 FreeRouting 和 JDK 25，以无 GUI、禁用认证的方式启动 API 服务（端口 37864）
 
 如果未启动服务，点击布线菜单时扩展会弹窗提示操作步骤，并提供下载链接和启动脚本下载。
 

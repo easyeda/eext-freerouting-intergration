@@ -25,7 +25,7 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 ### Installation
 
 1. Download and install the latest FreeRouting version (V2.2.2 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases)
-2. Download and install JDK 25 (required by FreeRouting API server). [Download JDK 25](https://adoptium.net/temurin/releases/?version=25)
+2. Linux/Mac: Download and install JDK 25 (required by FreeRouting API server). [Download JDK 25](https://adoptium.net/temurin/releases/?version=25) | Windows: JDK not required
 3. Open EasyEDA Pro, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
 4. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file
 5. After installation, go to Installed list, click FreeRouting, and enable "**External Interaction**" in settings (required for connecting to FreeRouting service)
@@ -38,11 +38,12 @@ Before using the extension, you need to start the FreeRouting API service. Run t
 
 | Platform | Script |
 |----------|--------|
-| Windows | `scripts/start-freerouting.bat` |
+| Windows | `scripts/start-freerouting-windows.bat` |
 | Linux | `scripts/start-freerouting-linux.sh` |
 | macOS | `scripts/start-freerouting-mac.sh` |
 
-The script will automatically find your local FreeRouting installation and JDK 25, then launch the API server in headless mode with authentication disabled (port 37864).
+- Windows: Run the `.bat` script directly, no JDK installation required
+- Linux/macOS: The script will automatically find your local FreeRouting installation and JDK 25, then launch the API server in headless mode with authentication disabled (port 37864)
 
 If the service is not running, the extension will show a dialog with step-by-step instructions and download links when you click the routing menu.
 
