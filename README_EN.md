@@ -24,11 +24,10 @@ With this extension, you can directly push PCB files to the open-source auto-rou
 
 ### Installation
 
-1. Download and install the latest FreeRouting version (V2.2.2 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases)
-2. Linux/Mac: Download and install JDK 25 (required by FreeRouting API server). [Download JDK 25](https://adoptium.net/temurin/releases/?version=25) | Windows: JDK not required
-3. Open EasyEDA Pro, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
-4. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file
-5. After installation, go to Installed list, click FreeRouting, and enable "**External Interaction**" in settings (required for connecting to FreeRouting service)
+1. Download and install the latest FreeRouting version (V2.2.3 or above). [Download FreeRouting](https://github.com/freerouting/freerouting/releases)
+2. Open EasyEDA Pro, go to top menu: Advanced - Extension Manager, find FreeRouting, and click Install
+3. Or download the .eext extension package, go to top menu: Advanced - Extension Manager - Import .eext file
+4. After installation, go to Installed list, click FreeRouting, and enable "**External Interaction**" in settings (required for connecting to FreeRouting service)
 
 ![Extension Settings](images/ext-setting-en.jpg)
 
@@ -42,8 +41,7 @@ Before using the extension, you need to start the FreeRouting API service. Run t
 | Linux | `scripts/start-freerouting-linux.sh` |
 | macOS | `scripts/start-freerouting-mac.sh` |
 
-- Windows: Run the `.bat` script directly, no JDK installation required
-- Linux/macOS: The script will automatically find your local FreeRouting installation and JDK 25, then launch the API server in headless mode with authentication disabled (port 37864)
+The script will automatically find your local FreeRouting installation and launch the API server in headless mode with authentication disabled (port 37864).
 
 If the service is not running, the extension will show a dialog with step-by-step instructions and download links when you click the routing menu.
 

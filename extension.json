@@ -2,8 +2,8 @@
 	"name": "freerouting-intergration",
 	"uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
 	"displayName": "FreeRouting",
-	"description": "FreeRouting自动布线器集成工具，使用脚本一键启动FreeRouting后，运行扩展自动完成布线数据对接，支持动态更新布线进度。",
-	"version": "1.6.0",
+	"description": "FreeRouting自动布线器集成工具，使用脚本自动启动FreeRouting后，运行扩展自动完成布线数据对接，支持动态更新布线进度。",
+	"version": "1.7.0",
 	"publisher": "EasyEDA",
 	"engines": {
 		"eda": "^3.2.0"

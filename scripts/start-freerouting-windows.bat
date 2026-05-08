@@ -44,6 +44,7 @@ if not defined FR_EXE (
 echo Found: %FR_EXE%
 echo.
 echo [INFO] Starting FreeRouting API server on http://127.0.0.1:37864 ...
+echo [INFO] Please run FreeRouting extension at EasyEDA Pro/JLCEDA Pro.
 echo.
 
 "%FR_EXE%" ^

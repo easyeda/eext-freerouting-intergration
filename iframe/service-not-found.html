@@ -59,7 +59,6 @@
     <div class="steps" id="stepsText"></div>
     <div class="btn-group" style="margin-bottom:16px;">
         <button class="btn btn-download" onclick="openDownload()" id="btnDownloadFR"></button>
-        <button class="btn btn-download" onclick="openJDK()" id="btnDownloadJDK"></button>
     </div>
     <div class="section-title" id="scriptTitle"></div>
     <div class="btn-group">
@@ -77,26 +76,24 @@
             zh: {
                 title: 'FreeRouting 服务未启动',
                 desc: '请按以下步骤操作：',
-                steps: '1. 下载并安装 FreeRouting (V2.2.0+)\n2. Linux/Mac: 下载并安装 JDK 25 | Windows: 无需安装 JDK\n3. 下载并运行对应平台的启动脚本\n4. 启动成功后点击"重新检测"',
+                steps: '1. 下载并安装 FreeRouting (V2.3.0+)\n2. 下载并运行对应平台的启动脚本\n3. 启动成功后点击"重新检测"',
                 btn_download_fr: '1. 下载 FreeRouting',
-                btn_download_jdk: '2. Linux/Mac: JDK 25',
-                script_title: '3. 下载启动脚本：',
+                script_title: '2. 下载启动脚本：',
                 btn_win: 'Windows (.bat)',
                 btn_linux: 'Linux (.sh)',
                 btn_mac: 'macOS (.sh)',
-                btn_retry: '4. 重新检测'
+                btn_retry: '3. 重新检测'
             },
             en: {
                 title: 'FreeRouting Service Not Running',
                 desc: 'Please follow these steps:',
-                steps: '1. Download and install FreeRouting (V2.2.0+)\n2. Linux/Mac: Download and install JDK 25 | Windows: Not required\n3. Download and run the startup script for your platform\n4. Click "Retry" after the service starts',
+                steps: '1. Download and install FreeRouting (V2.3.0+)\n2. Download and run the startup script for your platform\n3. Click "Retry" after the service starts',
                 btn_download_fr: '1. Download FreeRouting',
-                btn_download_jdk: '2. Linux/Mac: JDK 25',
-                script_title: '3. Download startup script:',
+                script_title: '2. Download startup script:',
                 btn_win: 'Windows (.bat)',
                 btn_linux: 'Linux (.sh)',
                 btn_mac: 'macOS (.sh)',
-                btn_retry: '4. Retry'
+                btn_retry: '3. Retry'
             }
         };
 
@@ -108,7 +105,6 @@
             document.getElementById('descText').textContent = T.desc;
             document.getElementById('stepsText').innerText = T.steps;
             document.getElementById('btnDownloadFR').textContent = T.btn_download_fr;
-            document.getElementById('btnDownloadJDK').textContent = T.btn_download_jdk;
             document.getElementById('scriptTitle').textContent = T.script_title;
             document.getElementById('btnWin').textContent = T.btn_win;
             document.getElementById('btnLinux').textContent = T.btn_linux;
@@ -188,6 +184,7 @@
             'echo Found: %FR_EXE%',
             'echo.',
             'echo [INFO] Starting FreeRouting API server on http://127.0.0.1:37864 ...',
+            'echo [INFO] Please run FreeRouting extension at EasyEDA Pro/JLCEDA Pro.',
             'echo.',
             '',
             '"%FR_EXE%" ^',
@@ -209,48 +206,32 @@
             'echo "============================================"',
             'echo',
             '',
-            'FR_JAR=""',
-            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/app" ]; then',
-            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/app"/freerouting-executable.jar 2>/dev/null | head -1)',
-            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t "$HOME/.local/share/freerouting/app"/freerouting-*.jar 2>/dev/null | head -1)',
+            'FR_EXE=""',
+            'if [ -z "$FR_EXE" ] && [ -x "$HOME/.local/share/freerouting/freerouting" ]; then',
+            '    FR_EXE="$HOME/.local/share/freerouting/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/lib" ]; then',
-            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/lib"/freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "/opt/freerouting/freerouting" ]; then',
+            '    FR_EXE="/opt/freerouting/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ] && [ -d "/opt/freerouting/lib" ]; then',
-            '    FR_JAR=$(ls -t /opt/freerouting/lib/freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "/usr/local/bin/freerouting" ]; then',
+            '    FR_EXE="/usr/local/bin/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ]; then',
-            '    FR_JAR=$(ls -t freerouting-executable.jar 2>/dev/null | head -1)',
-            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "./freerouting" ]; then',
+            '    FR_EXE="./freerouting"',
             'fi',
             '',
-            'if [ -z "$FR_JAR" ]; then',
-            '    echo "[ERROR] FreeRouting jar not found."',
+            'if [ -z "$FR_EXE" ]; then',
+            '    echo "[ERROR] FreeRouting executable not found."',
             '    echo "Please install from: https://github.com/freerouting/freerouting/releases"',
             '    exit 1',
             'fi',
             '',
-            'echo "Found: $FR_JAR"',
-            'JAVA_CMD=""',
-            'for d in /usr/lib/jvm/java-25-* /usr/lib/jvm/jdk-25* /usr/lib/jvm/temurin-25-*; do',
-            '    [ -z "$JAVA_CMD" ] && [ -x "$d/bin/java" ] && JAVA_CMD="$d/bin/java"',
-            'done',
-            'if [ -z "$JAVA_CMD" ] && [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA_CMD="$JAVA_HOME/bin/java"; fi',
-            'if [ -z "$JAVA_CMD" ] && command -v java &>/dev/null; then JAVA_CMD="java"; fi',
-            'if [ -z "$JAVA_CMD" ] && [ -x "$HOME/.local/share/freerouting/runtime/bin/java" ]; then',
-            '    JAVA_CMD="$HOME/.local/share/freerouting/runtime/bin/java"',
-            '    echo "[WARN] Using bundled JRE. If API fails, install JDK 25+."',
-            'fi',
-            'if [ -z "$JAVA_CMD" ]; then',
-            '    echo "[ERROR] Java not found. Install JDK 25+: https://adoptium.net/temurin/releases/?version=25"',
-            '    exit 1',
-            'fi',
-            '',
-            'echo "Java: $JAVA_CMD"',
-            'echo "Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
-            'echo "Press Ctrl+C to stop."',
-            '"$JAVA_CMD" -jar "$FR_JAR" \\',
+            'echo "Found: $FR_EXE"',
+            'echo',
+            'echo "[INFO] Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
+            'echo "[INFO] Please run FreeRouting extension at EasyEDA Pro/JLCEDA Pro."',
+            'echo',
+            '"$FR_EXE" \\',
             '    --gui.enabled=false \\',
             '    --api_server.enabled=true \\',
             '    --api_server.endpoints=http://127.0.0.1:37864 \\',
@@ -266,56 +247,35 @@
             'echo "============================================"',
             'echo',
             '',
-            'FR_JAR=""',
-            'if [ -d "/Applications/freerouting.app/Contents/app" ]; then',
-            '    FR_JAR=$(ls -t /Applications/freerouting.app/Contents/app/freerouting-executable.jar 2>/dev/null | head -1)',
-            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t /Applications/freerouting.app/Contents/app/freerouting-*.jar 2>/dev/null | head -1)',
+            'FR_EXE=""',
+            'if [ -z "$FR_EXE" ] && [ -x "/Applications/freerouting.app/Contents/MacOS/freerouting" ]; then',
+            '    FR_EXE="/Applications/freerouting.app/Contents/MacOS/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ] && [ -d "$HOME/Applications/freerouting.app/Contents/app" ]; then',
-            '    FR_JAR=$(ls -t "$HOME/Applications/freerouting.app/Contents/app"/freerouting-executable.jar 2>/dev/null | head -1)',
-            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t "$HOME/Applications/freerouting.app/Contents/app"/freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "$HOME/Applications/freerouting.app/Contents/MacOS/freerouting" ]; then',
+            '    FR_EXE="$HOME/Applications/freerouting.app/Contents/MacOS/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ] && [ -d "$HOME/.local/share/freerouting/lib" ]; then',
-            '    FR_JAR=$(ls -t "$HOME/.local/share/freerouting/lib"/freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "$HOME/.local/share/freerouting/freerouting" ]; then',
+            '    FR_EXE="$HOME/.local/share/freerouting/freerouting"',
             'fi',
-            'if [ -z "$FR_JAR" ]; then',
-            '    FR_JAR=$(ls -t freerouting-executable.jar 2>/dev/null | head -1)',
-            '    [ -z "$FR_JAR" ] && FR_JAR=$(ls -t freerouting-*.jar 2>/dev/null | head -1)',
+            'if [ -z "$FR_EXE" ] && [ -x "/usr/local/bin/freerouting" ]; then',
+            '    FR_EXE="/usr/local/bin/freerouting"',
+            'fi',
+            'if [ -z "$FR_EXE" ] && [ -x "./freerouting" ]; then',
+            '    FR_EXE="./freerouting"',
             'fi',
             '',
-            'if [ -z "$FR_JAR" ]; then',
-            '    echo "[ERROR] FreeRouting jar not found."',
+            'if [ -z "$FR_EXE" ]; then',
+            '    echo "[ERROR] FreeRouting executable not found."',
             '    echo "Please install from: https://github.com/freerouting/freerouting/releases"',
             '    exit 1',
             'fi',
             '',
-            'echo "Found: $FR_JAR"',
-            'JAVA_CMD=""',
-            'if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA_CMD="$JAVA_HOME/bin/java"; fi',
-            'if [ -z "$JAVA_CMD" ] && [ -x "/usr/libexec/java_home" ]; then',
-            '    JH=$(/usr/libexec/java_home -v 25 2>/dev/null)',
-            '    [ -z "$JH" ] && JH=$(/usr/libexec/java_home 2>/dev/null)',
-            '    [ -n "$JH" ] && [ -x "$JH/bin/java" ] && JAVA_CMD="$JH/bin/java"',
-            'fi',
-            'for d in /Library/Java/JavaVirtualMachines/temurin-25*/Contents/Home; do',
-            '    [ -z "$JAVA_CMD" ] && [ -x "$d/bin/java" ] && JAVA_CMD="$d/bin/java"',
-            'done',
-            'if [ -z "$JAVA_CMD" ] && command -v java &>/dev/null; then JAVA_CMD="java"; fi',
-            'if [ -z "$JAVA_CMD" ]; then',
-            '    for p in "/Applications/freerouting.app/Contents/runtime/Contents/Home/bin/java" \\',
-            '             "$HOME/Applications/freerouting.app/Contents/runtime/Contents/Home/bin/java"; do',
-            '        if [ -x "$p" ]; then JAVA_CMD="$p"; echo "[WARN] Using bundled JRE."; break; fi',
-            '    done',
-            'fi',
-            'if [ -z "$JAVA_CMD" ]; then',
-            '    echo "[ERROR] Java not found. Install JDK 25+: https://adoptium.net/temurin/releases/?version=25"',
-            '    exit 1',
-            'fi',
-            '',
-            'echo "Java: $JAVA_CMD"',
-            'echo "Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
-            'echo "Press Ctrl+C to stop."',
-            '"$JAVA_CMD" -jar "$FR_JAR" \\',
+            'echo "Found: $FR_EXE"',
+            'echo',
+            'echo "[INFO] Starting FreeRouting API server on http://127.0.0.1:37864 ..."',
+            'echo "[INFO] Please run FreeRouting extension at EasyEDA Pro/JLCEDA Pro."',
+            'echo',
+            '"$FR_EXE" \\',
             '    --gui.enabled=false \\',
             '    --api_server.enabled=true \\',
             '    --api_server.endpoints=http://127.0.0.1:37864 \\',
@@ -325,7 +285,7 @@
         ].join('\n');
 
         var FILENAMES = {
-            win: 'start-freerouting.bat',
+            win: 'start-freerouting-windows.bat',
             linux: 'start-freerouting-linux.sh',
             mac: 'start-freerouting-mac.sh'
         };
@@ -354,13 +314,6 @@
             var eda = getEda();
             if (eda && eda.sys_Window) {
                 eda.sys_Window.open('https://github.com/freerouting/freerouting/releases');
-            }
-        };
-
-        window.openJDK = function() {
-            var eda = getEda();
-            if (eda && eda.sys_Window) {
-                eda.sys_Window.open('https://adoptium.net/temurin/releases/?version=25');
             }
         };
 

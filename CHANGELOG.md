@@ -1,3 +1,9 @@
+# 1.7.0
+
+- 全平台 FreeRouting 使用可执行文件直接启动，无需安装 JDK 25
+- 更新 Linux 和 macOS 启动脚本，使用 freerouting 可执行文件
+- 简化弹窗和文档，移除 JDK 25 相关说明
+
 # 1.6.0
 
 - Windows 版本 FreeRouting 使用 freerouting.exe 直接启动，无需安装 JDK 25
