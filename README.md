@@ -1,7 +1,7 @@
 
 # FreeRouting 自动布线器集成
 
-[English](README_EN.md)
+[English](./README.en.md)
 
 通过本扩展你可以直接把PCB文件推送给开源自动布线工具Freerouting，并且不需要手动运行Freerouting，并操作导入导出自动布线文件，实现一键自动布线，为PCB自动布线提供新的选择。
 
