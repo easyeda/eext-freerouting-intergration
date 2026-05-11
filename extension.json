@@ -1,53 +1,56 @@
 {
-	"name": "freerouting-intergration",
-	"uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
-	"displayName": "FreeRouting",
-	"description": "FreeRouting自动布线器集成工具，使用脚本自动启动FreeRouting后，运行扩展自动完成布线数据对接，支持动态更新布线进度。",
-	"version": "1.7.0",
-	"publisher": "EasyEDA",
-	"engines": {
-		"eda": "^3.2.0"
-	},
-	"license": "Apache-2.0",
-	"repository": {
-		"type": "extension-store",
-		"url": ""
-	},
-	"categories": "PCB",
-	"keywords": [
-		"PCB","FreeRouting","AutoRoute","自动布线"
-	],
-	"images": {
-		"logo": "./images/logo.png"
-	},
-	"homepage": "https://github.com/easyeda/eext-freerouting-intergration",
-	"bugs": "https://github.com/easyeda/eext-freerouting-intergration/issues",
-	"activationEvents": {},
-	"entry": "./dist/index",
-	"dependentExtensions": {},
-	"headerMenus": {
-		"pcb": [
-			{
-				"id": "Freerouting",
-				"title": "FreeRouting",
-				"menuItems": [
-					{
-						"id": "AutoRoute",
-						"title": "直接自动布线",
-						"registerFn": "autoRoute"
-					},
-					{
-						"id": "AutoRouteCustom",
-						"title": "自定义自动布线...",
-						"registerFn": "autoRouteCustom"
-					},
-					{
-						"id": "StopRoute",
-						"title": "停止布线",
-						"registerFn": "stopRoute"
-					}
-				]
-			}
-		]
-	}
+  "name": "freerouting-intergration",
+  "uuid": "cb8695de3b6f4258a74f0c3b9aff73ea",
+  "displayName": "FreeRouting",
+  "description": "FreeRouting自动布线器集成工具，使用脚本自动启动FreeRouting后，运行扩展自动完成布线数据对接，支持动态更新布线进度。",
+  "version": "1.7.0",
+  "publisher": "EasyEDA",
+  "engines": {
+    "eda": "^3.2.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "github",
+    "url": "https://github.com/easyeda/eext-freerouting-intergration"
+  },
+  "categories": "PCB",
+  "keywords": [
+    "PCB",
+    "FreeRouting",
+    "AutoRoute",
+    "自动布线"
+  ],
+  "images": {
+    "logo": "./images/logo.png"
+  },
+  "homepage": "https://github.com/easyeda",
+  "bugs": "https://github.com/easyeda/eext-freerouting-intergration/issues",
+  "activationEvents": {},
+  "entry": "./dist/index",
+  "dependentExtensions": {},
+  "headerMenus": {
+    "pcb": [
+      {
+        "id": "Freerouting",
+        "title": "FreeRouting",
+        "menuItems": [
+          {
+            "id": "AutoRoute",
+            "title": "直接自动布线",
+            "registerFn": "autoRoute"
+          },
+          {
+            "id": "AutoRouteCustom",
+            "title": "自定义自动布线...",
+            "registerFn": "autoRouteCustom"
+          },
+          {
+            "id": "StopRoute",
+            "title": "停止布线",
+            "registerFn": "stopRoute"
+          }
+        ]
+      }
+    ]
+  }
 }
