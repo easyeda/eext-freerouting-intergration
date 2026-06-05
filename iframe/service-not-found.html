@@ -72,47 +72,27 @@
     (function() {
         'use strict';
 
-        var i18n = {
-            zh: {
-                title: 'FreeRouting 服务未启动',
-                desc: '请按以下步骤操作：',
-                steps: '1. 下载并安装 FreeRouting (V2.3.0+)\n2. 下载并运行对应平台的启动脚本\n3. 启动成功后点击"重新检测"',
-                btn_download_fr: '1. 下载 FreeRouting',
-                script_title: '2. 下载启动脚本：',
-                btn_win: 'Windows (.bat)',
-                btn_linux: 'Linux (.sh)',
-                btn_mac: 'macOS (.sh)',
-                btn_retry: '3. 重新检测'
-            },
-            en: {
-                title: 'FreeRouting Service Not Running',
-                desc: 'Please follow these steps:',
-                steps: '1. Download and install FreeRouting (V2.3.0+)\n2. Download and run the startup script for your platform\n3. Click "Retry" after the service starts',
-                btn_download_fr: '1. Download FreeRouting',
-                script_title: '2. Download startup script:',
-                btn_win: 'Windows (.bat)',
-                btn_linux: 'Linux (.sh)',
-                btn_mac: 'macOS (.sh)',
-                btn_retry: '3. Retry'
-            }
-        };
-
-        var lang = 'zh';
-        var T = i18n[lang];
-
-        function applyI18n() {
-            document.getElementById('titleText').textContent = T.title;
-            document.getElementById('descText').textContent = T.desc;
-            document.getElementById('stepsText').innerText = T.steps;
-            document.getElementById('btnDownloadFR').textContent = T.btn_download_fr;
-            document.getElementById('scriptTitle').textContent = T.script_title;
-            document.getElementById('btnWin').textContent = T.btn_win;
-            document.getElementById('btnLinux').textContent = T.btn_linux;
-            document.getElementById('btnMac').textContent = T.btn_mac;
-            document.getElementById('btnRetry').textContent = T.btn_retry;
-            document.title = T.title;
+        // i18n helper using EDA sys_I18n
+        var edaObj = (typeof eda !== 'undefined') ? eda : (window.parent && window.parent.eda);
+        function t(tag) {
+            if (edaObj && edaObj.sys_I18n) return edaObj.sys_I18n.text(tag);
+            return tag;
         }
 
+        function applyI18n() {
+            document.getElementById('titleText').textContent = t('FreeRouting Service Not Running');
+            document.getElementById('descText').textContent = t('Please follow these steps:');
+            document.getElementById('stepsText').innerText = t('service_not_found_steps');
+            document.getElementById('btnDownloadFR').textContent = t('1. Download FreeRouting');
+            document.getElementById('scriptTitle').textContent = t('2. Download startup script:');
+            document.getElementById('btnWin').textContent = t('Windows (.bat)');
+            document.getElementById('btnLinux').textContent = t('Linux (.sh)');
+            document.getElementById('btnMac').textContent = t('macOS (.sh)');
+            document.getElementById('btnRetry').textContent = t('3. Retry');
+            document.title = t('FreeRouting Service Not Running');
+        }
+
+        // Apply default i18n (fallback tags)
         applyI18n();
 
         function getEda() {
@@ -124,18 +104,13 @@
             return null;
         }
 
-        (function detectLang() {
+        // Detect EDA, re-apply i18n with real translations
+        (function detectEdaThenInit() {
             var retries = 0;
             function tryDetect() {
-                var eda = getEda();
-                if (eda && eda.sys_I18n) {
-                    eda.sys_I18n.getCurrentLanguage().then(function(edaLang) {
-                        if (edaLang && edaLang.indexOf('zh') === -1) {
-                            lang = 'en';
-                            T = i18n[lang];
-                            applyI18n();
-                        }
-                    }).catch(function() {});
+                edaObj = getEda();
+                if (edaObj && edaObj.sys_I18n) {
+                    applyI18n();
                 } else if (++retries < 20) {
                     setTimeout(tryDetect, 200);
                 }

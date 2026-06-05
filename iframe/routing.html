@@ -157,68 +157,12 @@
     (function() {
         'use strict';
 
-        var i18n = {
-            zh: {
-                max_passes_label: '最大轮数 (max_passes) <span class="param-help" title="布线迭代次数">ⓘ</span>',
-                via_costs_label: '过孔成本 (via_costs) <span class="param-help" title="过孔的成本权重，越高越少使用过孔">ⓘ</span>',
-                max_threads_label: '最大线程数 (max_threads) <span class="param-help" title="并行布线的线程数">ⓘ</span>',
-                improvement_threshold_label: '改进阈值 (improvement_threshold) <span class="param-help" title="控制停止条件，0 表示完全布线">ⓘ</span>',
-                trace_pull_tight_label: '拉紧精度 (trace_pull_tight_accuracy) <span class="param-help" title="走线拉紧的精度">ⓘ</span>',
-                start_ripup_label: '撕裂成本 (start_ripup_costs) <span class="param-help" title="撕裂已有走线的起始成本">ⓘ</span>',
-                automatic_neckdown_label: '自动缩颈 (automatic_neckdown) <span class="param-help" title="自动在狭窄区域缩小走线宽度">ⓘ</span>',
-                allowed_via_types_label: '允许多种过孔 (allowed_via_types) <span class="param-help" title="允许使用不同类型的过孔">ⓘ</span>',
-                auto_drc_label: '完成后自动 DRC <span class="param-help" title="布线完成后自动执行设计规则检查">ⓘ</span>',
-                enabled: '启用',
-                disabled: '禁用',
-                allowed: '允许',
-                forbidden: '禁止',
-                start_routing: '开始布线',
-                stop_routing: '停止布线',
-                log_title: '运行日志',
-                log_copied: '日志已复制到剪切板',
-                statusbar_text: 'FreeRouting 自定义自动布线',
-                user_stop: '用户停止布线',
-                send_request: '发送布线请求，最大轮数: ',
-                routing_done: '布线结束',
-                eda_connected: 'EDA MessageBus 已连接',
-                eda_failed: '无法连接 EDA MessageBus，请重新打开面板',
-                dsn_received: '收到 DSN: ',
-                dsn_failed: 'DSN 获取失败',
-                lines: ' 行'
-            },
-            en: {
-                max_passes_label: 'Max Passes (max_passes) <span class="param-help" title="Routing iteration count">ⓘ</span>',
-                via_costs_label: 'Via Cost (via_costs) <span class="param-help" title="Cost weight for vias, higher = fewer vias">ⓘ</span>',
-                max_threads_label: 'Max Threads (max_threads) <span class="param-help" title="Number of threads for parallel routing">ⓘ</span>',
-                improvement_threshold_label: 'Improvement Threshold <span class="param-help" title="Stop condition, 0 = complete routing">ⓘ</span>',
-                trace_pull_tight_label: 'Trace Pull Tight Accuracy <span class="param-help" title="Accuracy for trace pull-tight optimization">ⓘ</span>',
-                start_ripup_label: 'Start Ripup Costs <span class="param-help" title="Starting cost for ripping up existing traces">ⓘ</span>',
-                automatic_neckdown_label: 'Automatic Neckdown <span class="param-help" title="Reduce trace width in narrow areas">ⓘ</span>',
-                allowed_via_types_label: 'Allowed Via Types <span class="param-help" title="Allow using different types of vias">ⓘ</span>',
-                auto_drc_label: 'Auto DRC <span class="param-help" title="Run DRC automatically after routing">ⓘ</span>',
-                enabled: 'Enabled',
-                disabled: 'Disabled',
-                allowed: 'Allowed',
-                forbidden: 'Forbidden',
-                start_routing: 'Start Routing',
-                stop_routing: 'Stop Routing',
-                log_title: 'Log',
-                log_copied: 'Log copied to clipboard',
-                statusbar_text: 'FreeRouting Custom Auto Route',
-                user_stop: 'User stopped routing',
-                send_request: 'Sending routing request, max passes: ',
-                routing_done: 'Routing finished',
-                eda_connected: 'EDA MessageBus connected',
-                eda_failed: 'Cannot connect EDA MessageBus, please reopen panel',
-                dsn_received: 'DSN received: ',
-                dsn_failed: 'DSN fetch failed',
-                lines: ' lines'
-            }
-        };
-
-        // Detect language from EDA API
-        var lang = 'zh';
-        var T = i18n[lang];
+        // i18n helper using EDA sys_I18n
+        var edaObj = (typeof eda !== 'undefined') ? eda : (window.parent && window.parent.eda);
+        function t(tag) {
+            if (edaObj && edaObj.sys_I18n) return edaObj.sys_I18n.text(tag);
+            return tag;
+        }
 
         function applyI18n() {
             document.querySelectorAll('[data-i18n]').forEach(function(el) {
@@ -230,31 +174,7 @@
             document.title = t('statusbar_text');
         }
 
-        (function detectLangThenInit() {
-            var retries = 0;
-            function tryDetect() {
-                var eda = getEda();
-                if (eda && eda.sys_I18n) {
-                    eda.sys_I18n.getCurrentLanguage().then(function(edaLang) {
-                        if (edaLang && edaLang.indexOf('zh') === -1) {
-                            lang = 'en';
-                            T = i18n[lang];
-                            applyI18n();
-                        }
-                        initMessageBus();
-                    }).catch(function() { initMessageBus(); });
-                } else if (++retries < 20) {
-                    setTimeout(tryDetect, 200);
-                } else {
-                    initMessageBus();
-                }
-            }
-            tryDetect();
-        })();
-
-        function t(key) { return T[key] || key; }
-
-        // Apply default i18n
+        // Apply default i18n (fallback tags)
         applyI18n();
 
         function getEda() {
@@ -398,6 +318,23 @@
                 }, 500);
             }
         }
+
+        // Detect EDA, re-apply i18n with real translations, then init message bus
+        (function detectEdaThenInit() {
+            var retries = 0;
+            function tryDetect() {
+                edaObj = getEda();
+                if (edaObj && edaObj.sys_I18n) {
+                    applyI18n();
+                    initMessageBus();
+                } else if (++retries < 20) {
+                    setTimeout(tryDetect, 200);
+                } else {
+                    initMessageBus();
+                }
+            }
+            tryDetect();
+        })();
     })();
     </script>
 </body>
