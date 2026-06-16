@@ -105,39 +105,39 @@
     <div class="main-content">
         <div class="settings-panel">
             <div class="param-group">
-                <label class="param-label" data-i18n="max_passes_label"></label>
+                <label class="param-label" data-i18n="max_passes_label">最大轮数 (max_passes) <span class="param-help" title="布线迭代次数">ⓘ</span></label>
                 <input type="number" class="param-input" id="maxPasses" value="100" min="1" max="1000">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="via_costs_label"></label>
+                <label class="param-label" data-i18n="via_costs_label">过孔成本 (via_costs) <span class="param-help" title="过孔的成本权重，越高越少使用过孔">ⓘ</span></label>
                 <input type="number" class="param-input" id="viaCosts" value="50" min="1" max="1000">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="max_threads_label"></label>
+                <label class="param-label" data-i18n="max_threads_label">最大线程数 (max_threads) <span class="param-help" title="并行布线的线程数">ⓘ</span></label>
                 <input type="number" class="param-input" id="maxThreads" value="4" min="1" max="32">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="improvement_threshold_label"></label>
+                <label class="param-label" data-i18n="improvement_threshold_label">改进阈值 (improvement_threshold) <span class="param-help" title="控制停止条件，0 表示完全布线">ⓘ</span></label>
                 <input type="number" class="param-input" id="improvementThreshold" value="0" min="0" max="1" step="0.001">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="trace_pull_tight_label"></label>
+                <label class="param-label" data-i18n="trace_pull_tight_label">拉紧精度 (trace_pull_tight_accuracy) <span class="param-help" title="走线拉紧的精度">ⓘ</span></label>
                 <input type="number" class="param-input" id="tracePullTightAccuracy" value="500" min="1" max="10000">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="start_ripup_label"></label>
+                <label class="param-label" data-i18n="start_ripup_label">撕裂成本 (start_ripup_costs) <span class="param-help" title="撕裂已有走线的起始成本">ⓘ</span></label>
                 <input type="number" class="param-input" id="startRipupCosts" value="100" min="1" max="10000">
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="automatic_neckdown_label"></label>
+                <label class="param-label" data-i18n="automatic_neckdown_label">自动缩颈 (automatic_neckdown) <span class="param-help" title="自动在狭窄区域缩小走线宽度">ⓘ</span></label>
                 <select class="param-input" id="automaticNeckdown"><option value="true" data-i18n-text="enabled"></option><option value="false" data-i18n-text="disabled"></option></select>
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="allowed_via_types_label"></label>
+                <label class="param-label" data-i18n="allowed_via_types_label">允许多种过孔 (allowed_via_types) <span class="param-help" title="允许使用不同类型的过孔">ⓘ</span></label>
                 <select class="param-input" id="allowedViaTypes"><option value="true" data-i18n-text="allowed"></option><option value="false" data-i18n-text="forbidden"></option></select>
             </div>
             <div class="param-group">
-                <label class="param-label" data-i18n="auto_drc_label"></label>
+                <label class="param-label" data-i18n="auto_drc_label">完成后自动 DRC <span class="param-help" title="布线完成后自动执行设计规则检查">ⓘ</span></label>
                 <select class="param-input" id="autoDrc"><option value="true" data-i18n-text="enabled"></option><option value="false" data-i18n-text="disabled"></option></select>
             </div>
             <button class="toolbar-btn" id="btnRoute" style="margin-top:auto;" data-i18n-text="start_routing"></button>
