@@ -1,5 +1,10 @@
 {
 	"直接自动布线": "Auto Route",
 	"自定义自动布线...": "Custom Auto Route...",
-	"停止布线": "Stop Routing"
+	"停止布线": "Stop Routing",
+	"FreeRouting自动布线器集成工具，使用脚本自动启动FreeRouting后，运行扩展自动完成布线数据对接，支持动态更新布线进度。": "FreeRouting auto-router integration tool. Automatically starts FreeRouting via script, runs the extension to complete routing data synchronization, with support for dynamic routing progress updates.",
+	"FreeRouting": "FreeRouting",
+	"PCB": "PCB",
+	"AutoRoute": "AutoRoute",
+	"自动布线": "Auto Routing"
 }
