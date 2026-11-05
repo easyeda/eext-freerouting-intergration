@@ -50,6 +50,7 @@ echo
 "$FR_EXE" \
     --gui.enabled=false \
     --api_server.enabled=true \
+    --api_server.http_allowed=true \
     --api_server.endpoints=http://127.0.0.1:37864 \
     --api_server.authentication.enabled=false \
     --api_server.cors_origins=* \
