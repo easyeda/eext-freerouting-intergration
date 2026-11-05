@@ -60,5 +60,7 @@
 	"Custom Auto Route": "自定义自动布线",
 	"Checking FreeRouting service...": "正在检查 FreeRouting 服务...",
 	"FreeRouting service detected": "FreeRouting 服务已检测到",
+	"FreeRouting service not running": "未检测到 FreeRouting 服务",
+	"External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry": "未开启扩展的“外部交互”权限，请前往：高级 -> 扩展管理器 -> FreeRouting -> 配置，开启“允许外部交互”后重试",
 	"FreeRouting Service Not Running": "FreeRouting 服务未启动"
 }

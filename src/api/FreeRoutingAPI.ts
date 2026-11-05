@@ -24,14 +24,28 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
 	return res.json() as Promise<T>;
 }
 
+export type ServiceCheckResult = 'ok' | 'permission-denied' | 'unavailable';
+
 export class FreeRoutingAPI {
-	static async healthCheck(): Promise<boolean> {
+	/**
+	 * 检测 FreeRouting 服务状态
+	 * 未开启扩展“外部交互”权限时，sys_ClientUrl 会抛出固定错误，据此单独区分
+	 */
+	static async checkService(): Promise<ServiceCheckResult> {
 		try {
 			await request('GET', '/system/status');
-			return true;
-		} catch {
-			return false;
+			return 'ok';
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (/外部交互|external interaction/i.test(message)) {
+				return 'permission-denied';
+			}
+			return 'unavailable';
 		}
+	}
+
+	static async healthCheck(): Promise<boolean> {
+		return (await FreeRoutingAPI.checkService()) === 'ok';
 	}
 
 	static getSystemStatus(): Promise<SystemStatusResponse> {

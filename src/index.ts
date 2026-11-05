@@ -5,7 +5,7 @@ import * as extensionConfig from '../extension.json';
 import { FreeRoutingRouter, RouteResult } from './router/FreeRoutingRouter';
 import { FreeRoutingAPI } from './api/FreeRoutingAPI';
 import { QUICK_ROUTE_OPTIONS, RoutingOptions } from './types';
-import { showInfo, showSuccess, showError, t } from './utils/toast';
+import { showInfo, showSuccess, showError, showWarning, t } from './utils/toast';
 
 const IFRAME_ID = 'freerouting-config';
 const SERVICE_DIALOG_ID = 'freerouting-service-dialog';
@@ -72,8 +72,22 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	}
 
 	logFn?.(t('Checking FreeRouting service...'), 'info');
-	if (!(await FreeRoutingAPI.healthCheck())) {
+	const serviceStatus = await FreeRoutingAPI.checkService();
+	if (serviceStatus === 'permission-denied') {
 		unlock();
+		const message = t(
+			'External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable "Allow External Interaction" and retry',
+		);
+		showWarning(message, 10);
+		logToPanel(message, 'error');
+		logFn?.(message, 'error');
+		return;
+	}
+	if (serviceStatus !== 'ok') {
+		unlock();
+		const message = t('FreeRouting service not running');
+		logToPanel(message, 'warn');
+		logFn?.(message, 'warn');
 		showServiceNotFoundDialog(options, logFn, showProgress);
 		return;
 	}

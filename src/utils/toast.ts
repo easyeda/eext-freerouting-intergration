@@ -7,19 +7,19 @@ function t(key: string): string {
 }
 
 export function showInfo(message: string, timer?: number): void {
-	eda.sys_ToastMessage.showMessage(message, 'info', timer);
+	eda.sys_ToastMessage.showMessage(message, 'info' as any, timer);
 }
 
 export function showSuccess(message: string): void {
-	eda.sys_ToastMessage.showMessage(message, 'success');
+	eda.sys_ToastMessage.showMessage(message, 'success' as any);
 }
 
 export function showError(message: string): void {
-	eda.sys_ToastMessage.showMessage(message, 'error');
+	eda.sys_ToastMessage.showMessage(message, 'error' as any);
 }
 
-export function showWarning(message: string): void {
-	eda.sys_ToastMessage.showMessage(message, 'warning');
+export function showWarning(message: string, timer?: number): void {
+	eda.sys_ToastMessage.showMessage(message, 'warn' as any, timer);
 }
 
 export { t };

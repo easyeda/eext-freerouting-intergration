@@ -60,5 +60,7 @@
 	"Custom Auto Route": "Custom Auto Route",
 	"Checking FreeRouting service...": "Checking FreeRouting service...",
 	"FreeRouting service detected": "FreeRouting service detected",
+	"FreeRouting service not running": "FreeRouting service not running",
+	"External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry": "External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry",
 	"FreeRouting Service Not Running": "FreeRouting Service Not Running"
 }
