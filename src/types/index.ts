@@ -70,25 +70,36 @@ export interface RoutingProgress {
 // ==================== REST API 响应类型 ====================
 
 /**
- * 布线统计信息
+ * 布线统计信息（完整任务详情）
  */
 export interface RoutingStatistics {
-	layers?: { total_count?: number };
-	components?: { total_count?: number };
-	nets?: { total_count?: number };
-	traces?: { total_count?: number };
-	vias?: { total_count?: number };
+	layers?: { totalCount?: number; total_count?: number };
+	components?: { totalCount?: number; total_count?: number };
+	nets?: { totalCount?: number; total_count?: number };
+	traces?: { totalCount?: number; total_count?: number };
+	vias?: { totalCount?: number; total_count?: number };
+	connections?: { maximumCount?: number; incompleteCount?: number; maximum_count?: number; incomplete_count?: number };
+}
+
+/**
+ * 布线实时统计（compact=true 时返回）
+ */
+export interface JobLiveStatistics {
+	total_nets?: number;
+	unrouted_connections?: number;
+	clearance_violations?: number;
+	normalized_score?: number;
 }
 
 /**
  * 任务状态
  */
-export type JobState = 'QUEUED' | 'READY_TO_START' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'FAILED' | 'TIMED_OUT';
+export type JobState = 'QUEUED' | 'READY_TO_START' | 'RUNNING' | 'PAUSED' | 'STOPPING' | 'COMPLETED' | 'CANCELLED' | 'FAILED' | 'TIMED_OUT' | 'TERMINATED';
 
 /**
  * 任务阶段
  */
-export type JobStage = 'IDLE' | 'FANOUT' | 'ROUTING' | 'OPTIMIZING' | 'POSTPROCESSING';
+export type JobStage = 'IDLE' | 'FANOUT' | 'ROUTING' | 'OPTIMIZATION' | 'OPTIMIZING' | 'POSTPROCESSING';
 
 /**
  * 创建会话响应
@@ -111,7 +122,15 @@ export interface JobResponse {
 	priority?: string;
 	created_at?: string;
 	started_at?: string;
+	finished_at?: string;
 	current_pass?: number;
+	duration_seconds?: number;
+	/** compact=true 时的实时统计 */
+	statistics?: JobLiveStatistics;
+	resource_usage?: {
+		cpu_time_seconds?: number;
+		peak_memory_mb?: number;
+	};
 	router_settings?: {
 		max_passes?: number;
 		[key: string]: unknown;

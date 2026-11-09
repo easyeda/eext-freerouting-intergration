@@ -12,6 +12,9 @@ import { t } from '../utils/toast';
 export type ProgressCallback = (progress: RoutingProgress) => void;
 export type LogCallback = (message: string, level: string) => void;
 
+/** 真实进度不变时的爬升间隔 (毫秒) */
+const CREEP_INTERVAL = 3000;
+
 export interface RouteResult {
 	success: boolean;
 	statistics?: RoutingStatistics;
@@ -44,6 +47,8 @@ export class FreeRoutingRouter {
 	private currentJobId?: string;
 	private pollTimeout?: ReturnType<typeof setTimeout>;
 	private pollResolve?: (state: JobState) => void;
+	/** 当前已显示的进度百分比，保证只增不减 */
+	private lastPercentage = 0;
 
 	constructor(onProgress?: ProgressCallback, onLog?: LogCallback) {
 		this.onProgress = onProgress;
@@ -57,6 +62,7 @@ export class FreeRoutingRouter {
 
 		this.isRouting = true;
 		this.cancelled = false;
+		this.lastPercentage = 0;
 
 		try {
 			this.checkCancelled();
@@ -115,13 +121,16 @@ export class FreeRoutingRouter {
 
 				const jobStatus = await FreeRoutingAPI.getJobStatus(job.id);
 				const stats = jobStatus.output?.statistics;
-				if (stats) {
-					this.onLog?.(`${t('Stats: nets ')}${stats.nets?.total_count ?? 0}${t(' routed | vias ')}${stats.vias?.total_count ?? 0}${t(' traces ')}${stats.traces?.total_count ?? 0}`, 'info');
-				}
+				const liveStats = jobStatus.statistics;
+				const nets = stats?.nets?.totalCount ?? stats?.nets?.total_count ?? liveStats?.total_nets ?? 0;
+				const vias = stats?.vias?.totalCount ?? stats?.vias?.total_count ?? 0;
+				const traces = stats?.traces?.totalCount ?? stats?.traces?.total_count ?? 0;
+				this.onLog?.(`${t('Stats: nets ')}${nets}${t(' routed | vias ')}${vias}${t(' traces ')}${traces}`, 'info');
 
 				const output = await FreeRoutingAPI.getJobOutput(job.id);
 
 				this.onLog?.(t('Importing final results...'), 'info');
+				this.onProgress?.({ stage: '', percentage: 97, message: t('Importing final results...') });
 				await eda.pcb_Document.startCalculatingRatline();
 				await deletePrimitives(await collectRouteIds());
 				const filename = output.filename || 'routing_result.ses';
@@ -130,9 +139,11 @@ export class FreeRoutingRouter {
 					this.onLog?.(t('SES file imported'), 'success');
 					if (!options.skipDrc) {
 						this.onLog?.(t('Running DRC check...'), 'info');
+						this.onProgress?.({ stage: '', percentage: 99, message: t('Running DRC check...') });
 						await eda.pcb_Drc.check(true, true, false);
 						this.onLog?.(t('DRC check complete'), 'success');
 					}
+					this.onProgress?.({ stage: '', percentage: 100, message: t('SES file imported') });
 					return { success: true, statistics: stats };
 				} else {
 					this.onLog?.(t('SES import failed'), 'error');
@@ -160,13 +171,19 @@ export class FreeRoutingRouter {
 		if (this.cancelled) throw new Error('布线已取消');
 	}
 
-	private pollProgress(jobId: string, dsnFilename: string, maxPasses: number): Promise<JobState> {
+	private pollProgress(jobId: string, dsnFilename: string, maxPasses: number, totalConnections = 0): Promise<JobState> {
 		return new Promise((resolve) => {
 			this.pollResolve = resolve;
-			const TERMINAL_STATES: JobState[] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];
+			const TERMINAL_STATES: JobState[] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'TERMINATED'];
 			let lastStage = '';
 			let lastPass = 0;
+			let lastUnrouted: number | null = null;
+			let lastMessage = '';
 			let lastPreviewTime = 0;
+			let lastAdvanceTime = Date.now();
+			let total = totalConnections > 0 ? totalConnections : 0;
+			let seenUnrouted = false;
+			let nextDelay = POLL_INTERVAL;
 
 			const poll = async () => {
 				if (this.cancelled) {
@@ -175,7 +192,7 @@ export class FreeRoutingRouter {
 				}
 
 				try {
-					const status = await FreeRoutingAPI.getJobStatus(jobId);
+					const status = await FreeRoutingAPI.getJobStatusCompact(jobId);
 
 					if (this.cancelled) {
 						resolve('CANCELLED');
@@ -183,43 +200,91 @@ export class FreeRoutingRouter {
 					}
 
 					if (TERMINAL_STATES.includes(status.state)) {
-						this.onProgress?.({ stage: '', percentage: 100, message: '' });
+						if (status.state === 'COMPLETED') {
+							this.lastPercentage = Math.min(99, Math.max(this.lastPercentage, 95));
+							this.onProgress?.({
+								stage: '',
+								percentage: Math.round(this.lastPercentage),
+								message: t('Routing complete, fetching results...'),
+							});
+						}
 						resolve(status.state);
 						return;
 					}
 
-					const currentStage = `${status.stage || ''}_${status.state}`;
+					const stageKey = (status.stage || '').toUpperCase();
+					const currentStage = `${stageKey}_${status.state}`;
 					const currentPass = status.current_pass || 0;
-					const cappedPass = Math.min(currentPass, maxPasses - 1);
-					const percentage = maxPasses > 1 ? Math.round((cappedPass / maxPasses) * 100) : 0;
+					const incomplete =
+						status.statistics?.unrouted_connections ??
+						status.input?.statistics?.connections?.incompleteCount ??
+						status.input?.statistics?.connections?.incomplete_count ??
+						null;
+
+					if (incomplete != null && incomplete > 0) seenUnrouted = true;
+					if (total <= 0 && incomplete != null && incomplete > 0) total = incomplete;
+					// 首个采样越早，基准越接近真实总连接数
+					nextDelay = total > 0 && incomplete != null ? POLL_INTERVAL : 500;
 
 					const stageMap: Record<string, string> = {
 						'IDLE': t('Idle'),
 						'FANOUT': t('Fanout'),
 						'ROUTING': t('Routing'),
+						'OPTIMIZATION': t('Optimizing'),
 						'OPTIMIZING': t('Optimizing'),
 						'POSTPROCESSING': t('Postprocessing'),
 					};
-					const stageText = stageMap[status.stage || ''] || status.stage || status.state;
+					const stageText = stageMap[stageKey] || status.stage || status.state;
 					const passText = t('Routing: Pass ');
+					const unroutedText = incomplete != null && total > 0 ? `${t(' | unrouted ')}${incomplete}${t(' / ')}${total}` : '';
 
-					if (currentStage !== lastStage || (currentPass > 0 && currentPass !== lastPass)) {
-						lastStage = currentStage;
-						lastPass = currentPass;
-						this.onProgress?.({
-							stage: stageText,
-							percentage,
-							message: `${stageText}: ${passText}${currentPass} / ${maxPasses} (${percentage}%)`,
-						});
+					let ceiling = 90;
+					let target = this.lastPercentage;
+					const statsReady = total > 0 && incomplete != null && (incomplete > 0 || seenUnrouted);
+
+					if (stageKey === 'ROUTING' || stageKey === 'FANOUT') {
+						ceiling = 90;
+						if (statsReady) {
+							const routedFraction = Math.min(1, Math.max(0, (total - (incomplete as number)) / total));
+							target = 5 + routedFraction * 85;
+						} else if (maxPasses > 1) {
+							target = 5 + Math.min(1, currentPass / maxPasses) * 85;
+						}
+					} else if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
+						ceiling = 96;
+						target = Math.max(this.lastPercentage, 90);
+					} else if (status.state === 'RUNNING' && maxPasses > 1) {
+						ceiling = 90;
+						target = 5 + Math.min(1, currentPass / maxPasses) * 85;
 					}
 
-					const outputStats = status.output?.statistics;
-					const inputStats = status.input?.statistics;
-					const totalNets = inputStats?.nets?.total_count ?? 0;
-					const routedNets = outputStats?.nets?.total_count ?? 0;
-					const viaCount = outputStats?.vias?.total_count ?? 0;
-
+					// 只增不减；真实进度暂时不变时缓慢爬升，避免长时间看起来卡死
 					const now = Date.now();
+					if (target > this.lastPercentage) {
+						this.lastPercentage = Math.min(ceiling, target);
+						lastAdvanceTime = now;
+					} else if (
+						this.lastPercentage < ceiling &&
+						status.state === 'RUNNING' &&
+						now - lastAdvanceTime >= CREEP_INTERVAL
+					) {
+						const step = Math.max(0.2, (ceiling - this.lastPercentage) * 0.02);
+						this.lastPercentage = Math.min(ceiling, this.lastPercentage + step);
+						lastAdvanceTime = now;
+					}
+
+					const percentage = Math.min(99, Math.round(this.lastPercentage));
+					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
+					const changed = currentStage !== lastStage || currentPass !== lastPass || incomplete !== lastUnrouted;
+					if (changed || message !== lastMessage) {
+						if (changed) this.onLog?.(message, 'info');
+						this.onProgress?.({ stage: stageText, percentage, message });
+						lastStage = currentStage;
+						lastPass = currentPass;
+						lastUnrouted = incomplete;
+						lastMessage = message;
+					}
+
 					if ((now - lastPreviewTime) >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
 						lastPreviewTime = now;
 						try {
@@ -237,7 +302,10 @@ export class FreeRoutingRouter {
 						} catch (previewErr) {
 							console.warn('[FreeRouting] preview failed:', previewErr);
 						}
-						this.onLog?.(`${t('[Preview] routed: ')}${routedNets}/${totalNets}${t(' | vias: ')}${viaCount}`, 'info');
+						if (total > 0 && incomplete != null) {
+							const routed = Math.max(0, total - incomplete);
+							this.onLog?.(`${t('[Preview] routed: ')}${routed}/${total}${t(' | unrouted: ')}${incomplete}`, 'info');
+						}
 					}
 				} catch (error) {
 					if (this.cancelled) {
@@ -248,13 +316,14 @@ export class FreeRoutingRouter {
 				}
 
 				if (!this.cancelled) {
-					this.pollTimeout = setTimeout(poll, POLL_INTERVAL);
+					this.pollTimeout = setTimeout(poll, nextDelay);
 				} else {
 					resolve('CANCELLED');
 				}
 			};
 
-			this.pollTimeout = setTimeout(poll, POLL_INTERVAL);
+			// 立即做首次采样，尽早拿到基准连接数
+			this.pollTimeout = setTimeout(poll, 300);
 		});
 	}
 

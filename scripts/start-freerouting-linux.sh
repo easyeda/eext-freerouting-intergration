@@ -49,4 +49,4 @@ echo
     --api_server.endpoints=http://127.0.0.1:37864 \
     --api_server.authentication.enabled=false \
     --api_server.cors_origins=* \
-    --logging.console.level=ERROR
+    --logging.console.level=INFO

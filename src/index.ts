@@ -104,7 +104,6 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	const router = new FreeRoutingRouter(
 		(progress) => {
 			if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, progress.message);
-			logFn?.(progress.message, 'info');
 		},
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
@@ -125,7 +124,10 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 				const doneMsg = `${t('Routing completed')} | ${t('Duration: ')}${formatDuration(duration)}`;
 				if (result.statistics) {
 					const s = result.statistics;
-					const statsMsg = `${t('Result: routed nets ')}${s.nets?.total_count ?? 0}${t(' vias ')}${s.vias?.total_count ?? 0}${t(' traces ')}${s.traces?.total_count ?? 0}`;
+					const nets = s.nets?.totalCount ?? s.nets?.total_count ?? 0;
+					const vias = s.vias?.totalCount ?? s.vias?.total_count ?? 0;
+					const traces = s.traces?.totalCount ?? s.traces?.total_count ?? 0;
+					const statsMsg = `${t('Result: routed nets ')}${nets}${t(' vias ')}${vias}${t(' traces ')}${traces}`;
 					logToPanel(statsMsg);
 					logFn?.(statsMsg, 'info');
 				}
