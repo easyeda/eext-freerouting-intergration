@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeRouting</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+            font-size: 12px;
+            background: #F5F5F5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 16px 20px;
+            gap: 8px;
+        }
+        .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .title { font-size: 13px; font-weight: 600; color: #222; }
+        .percent { font-size: 18px; font-weight: 600; color: #007AFF; }
+        .message { font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bar { width: 100%; height: 8px; background: #E0E0E0; border-radius: 4px; overflow: hidden; }
+        .fill { width: 0%; height: 100%; background: #007AFF; transition: width 0.3s ease; }
+    </style>
+</head>
+<body>
+    <div class="row">
+        <span class="title" id="title">FreeRouting</span>
+        <span class="percent" id="percent">0%</span>
+    </div>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="message" id="message"></div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        var seen = {};
+
+        function getEdaCandidates() {
+            var list = [];
+            function add(candidate) {
+                try {
+                    if (candidate && list.indexOf(candidate) === -1) list.push(candidate);
+                } catch (e) {}
+            }
+            try { if (typeof eda !== 'undefined') add(eda); } catch (e) {}
+            try { if (window.eda) add(window.eda); } catch (e) {}
+            try { if (window.parent && window.parent.eda) add(window.parent.eda); } catch (e) {}
+            try { if (window.top && window.top.eda) add(window.top.eda); } catch (e) {}
+            return list;
+        }
+
+        function render(payload) {
+            if (!payload) return;
+            if (payload._id) {
+                if (seen[payload._id]) return;
+                seen[payload._id] = true;
+            }
+            if (payload.type === 'progress') {
+                var value = Number(payload.percentage);
+                if (!isFinite(value)) value = 0;
+                value = Math.max(0, Math.min(100, value));
+                document.getElementById('fill').style.width = value + '%';
+                document.getElementById('percent').textContent = Math.round(value) + '%';
+                if (payload.message) document.getElementById('message').textContent = payload.message;
+            } else if (payload.type === 'done') {
+                if (payload.message) document.getElementById('message').textContent = payload.message;
+            }
+        }
+
+        function handleMessage(msg) {
+            render(msg);
+        }
+
+        var busBound = false;
+        function bindBus() {
+            if (busBound) return;
+            var candidates = getEdaCandidates();
+            var bound = false;
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                if (!candidate || !candidate.sys_MessageBus) continue;
+                try { candidate.sys_MessageBus.subscribe('freerouting-log', handleMessage); bound = true; } catch (e) {}
+                try { candidate.sys_MessageBus.subscribePublic('freerouting-log-public', handleMessage); bound = true; } catch (e) {}
+            }
+            if (bound) busBound = true;
+        }
+        bindBus();
+
+        function processStorageEvents(raw) {
+            if (!raw) return;
+            var events;
+            try {
+                events = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                return;
+            }
+            if (!events || !events.length) return;
+            for (var i = 0; i < events.length; i++) {
+                if (events[i]) render(events[i]);
+            }
+        }
+
+        function pollStorageEvents() {
+            var candidates = getEdaCandidates();
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                var storage = candidate && candidate.sys_Storage;
+                if (!storage) continue;
+                try {
+                    var raw = storage.getExtensionUserConfig('__fr_custom_events__');
+                    if (raw && typeof raw.then === 'function') {
+                        raw.then(processStorageEvents, function() {});
+                    } else {
+                        processStorageEvents(raw);
+                    }
+                } catch (e) {}
+            }
+        }
+
+        setInterval(function() {
+            bindBus();
+            pollStorageEvents();
+        }, 400);
+        pollStorageEvents();
+    })();
+    </script>
+</body>
+</html>

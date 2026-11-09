@@ -9,6 +9,7 @@ import { showError, showInfo, showSuccess, showWarning, t } from './utils/toast'
 
 const IFRAME_ID = 'freerouting-config';
 const SERVICE_DIALOG_ID = 'freerouting-service-dialog';
+const PROGRESS_IFRAME_ID = 'freerouting-progress';
 
 const G = globalThis as any;
 const ROUTER_KEY = '__fr_router__';
@@ -113,6 +114,16 @@ function pushDoneToIFrame(message: string, level = 'success'): void {
 	pushMessageToIFrame({ type: 'done', message, level, _id: nextMessageId() });
 }
 
+function pushProgressToIFrame(percentage: number, message: string): void {
+	pushMessageToIFrame({ type: 'progress', percentage, message, _id: nextMessageId() });
+}
+
+function closeProgressIFrame(): void {
+	try {
+		eda.sys_IFrame.closeIFrame(PROGRESS_IFRAME_ID);
+	} catch (_) {}
+}
+
 function formatDuration(ms: number): string {
 	const s = Math.floor(ms / 1000);
 	if (s < 60) return `${s}${t('s')}`;
@@ -184,14 +195,25 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	// 显示值变成所有条目的平均值，最终卡在某个百分比。因此整个布线过程必须使用同一个 title。
 	const progressTitle = `${t('Auto-routing')} (v${extensionConfig.version})`;
 	if (showProgress) {
-		// EDA 的进度条组是共享的，先清空历史条目，确保本次只有一个进度条目
-		eda.sys_LoadingAndProgressBar.destroyProgressBar();
-		eda.sys_LoadingAndProgressBar.showProgressBar(0, progressTitle);
+		// 清空上一轮遗留的事件，避免新进度弹窗先显示旧的 66% 等历史值
+		try {
+			await eda.sys_Storage.setExtensionUserConfig(EVENTS_KEY, '[]');
+		} catch (_) {}
+		// 使用独立的进度弹窗，避免 EDA 共享进度组被其它导入/任务进度污染
+		try {
+			await eda.sys_IFrame.openIFrame('./iframe/progress.html', 420, 130, PROGRESS_IFRAME_ID, {
+				title: progressTitle,
+				buttonCallbackFn: (button: string) => {
+					if (button === 'close') stopRoute();
+				},
+			} as any);
+		} catch (_) {}
+		pushProgressToIFrame(0, progressTitle);
 	}
 
 	const router = new FreeRoutingRouter(
 		(progress) => {
-			if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, progressTitle);
+			if (showProgress) pushProgressToIFrame(progress.percentage, progress.message);
 		},
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
@@ -209,7 +231,11 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 		.route(options)
 		.then((result: RouteResult) => {
 			const duration = Date.now() - routeStartTime;
-			if (showProgress) eda.sys_LoadingAndProgressBar.destroyProgressBar();
+			if (showProgress) {
+				eda.sys_LoadingAndProgressBar.destroyProgressBar();
+				pushProgressToIFrame(result.success ? 100 : 96, result.success ? t('SES file imported') : t('Routing finished'));
+				setTimeout(closeProgressIFrame, 800);
+			}
 			if (result.success) {
 				showSuccess(t('Auto-routing completed!'));
 				logToPanel(`${t('Routing completed')} - ${new Date().toLocaleTimeString()} | ${t('Duration: ')}${formatDuration(duration)}`);
@@ -232,7 +258,10 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 		})
 		.catch((error: Error) => {
 			const duration = Date.now() - routeStartTime;
-			if (showProgress) eda.sys_LoadingAndProgressBar.destroyProgressBar();
+			if (showProgress) {
+				eda.sys_LoadingAndProgressBar.destroyProgressBar();
+				closeProgressIFrame();
+			}
 			const message = error.message || String(error);
 			if (message !== '布线已取消') {
 				showError(`${t('Routing failed: ')}${message}`);
@@ -264,6 +293,7 @@ export function stopRoute(): void {
 	setRouter(null);
 	unlock();
 	eda.sys_LoadingAndProgressBar.destroyProgressBar();
+	closeProgressIFrame();
 	try {
 		void eda.pcb_Document.startCalculatingRatline().catch(() => {});
 		void eda.pcb_Layer.setLayerVisible(57 as any).catch(() => {});
