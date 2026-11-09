@@ -218,7 +218,6 @@ export class FreeRoutingRouter {
 			let lastMessage = '';
 			let lastPreviewTime = 0;
 			let total = totalConnections > 0 ? totalConnections : 0;
-			let seenUnrouted = false;
 			let nextDelay = POLL_INTERVAL;
 			let lastLogsTime = 0;
 			let logBaseline = 0;
@@ -303,7 +302,6 @@ export class FreeRoutingRouter {
 						effectiveIncomplete = logUnrouted ?? logBaseline;
 					}
 
-					if (effectiveIncomplete != null && effectiveIncomplete > 0) seenUnrouted = true;
 					if (effectiveTotal <= 0 && effectiveIncomplete != null && effectiveIncomplete > 0) effectiveTotal = effectiveIncomplete;
 					nextDelay = POLL_INTERVAL;
 
@@ -323,25 +321,15 @@ export class FreeRoutingRouter {
 							: '';
 
 					let ceiling = 90;
-					let realTarget: number | null = null;
-					const statsReady = effectiveTotal > 0 && effectiveIncomplete != null && (effectiveIncomplete > 0 || seenUnrouted);
-
-					if (stageKey === 'ROUTING' || stageKey === 'FANOUT') {
-						ceiling = 90;
-						if (statsReady) {
-							const routedFraction = Math.min(1, Math.max(0, (effectiveTotal - (effectiveIncomplete as number)) / effectiveTotal));
-							realTarget = 5 + routedFraction * 85;
-						}
-					} else if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
+					if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
 						ceiling = 96;
-						if (statsReady && effectiveIncomplete === 0) realTarget = 90;
 					}
 
-					// 日志数据也拿不到时按每分钟 2% 平滑推进，避免瞬间跳到某个百分比后停住
+					// 进度只按时间平滑推进（每分钟 2%），不直接采用真实比例：
+					// 大板可能前几秒就布通大部分连接，真实比例会瞬间跳到 66% 后长时间不动
 					const elapsedMinutes = (now - progressStartedAt) / 60000;
 					const timeTarget = Math.min(ceiling, elapsedMinutes * 2);
-					const target = Math.max(timeTarget, realTarget ?? 0);
-					this.lastPercentage = Math.min(ceiling, Math.max(this.lastPercentage, target));
+					this.lastPercentage = Math.min(ceiling, Math.max(this.lastPercentage, timeTarget));
 
 					const percentage = Math.min(99, Math.round(this.lastPercentage));
 					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
