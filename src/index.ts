@@ -205,7 +205,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 		startStorageCommandPoll();
 		// 使用独立的进度弹窗，避免 EDA 共享进度组被其它导入/任务进度污染
 		try {
-			await eda.sys_IFrame.openIFrame('./iframe/progress.html', 420, 100, PROGRESS_IFRAME_ID, {
+			await eda.sys_IFrame.openIFrame('./iframe/progress.html', 420, 84, PROGRESS_IFRAME_ID, {
 				title: progressTitle,
 				buttonCallbackFn: (button: string) => {
 					if (button === 'close') stopRoute();

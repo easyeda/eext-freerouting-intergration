@@ -322,15 +322,24 @@ export class FreeRoutingRouter {
 							: '';
 
 					let ceiling = 90;
-					if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
+					let realTarget: number | null = null;
+					const statsReady = effectiveTotal > 0 && effectiveIncomplete != null;
+					if (stageKey === 'ROUTING' || stageKey === 'FANOUT') {
+						ceiling = 90;
+						if (statsReady) {
+							const routedFraction = Math.min(1, Math.max(0, (effectiveTotal - (effectiveIncomplete as number)) / effectiveTotal));
+							realTarget = 5 + routedFraction * 85;
+						}
+					} else if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
 						ceiling = 96;
+						if (statsReady && effectiveIncomplete === 0) realTarget = 90;
 					}
 
-					// 进度只按时间平滑推进（每分钟 2%），不直接采用真实比例：
-					// 大板可能前几秒就布通大部分连接，真实比例会瞬间跳到 66% 后长时间不动
+					// 优先使用日志里的真实未布通比例；仅在没有数据时用时间兜底，避免一直停在 0%
 					const elapsedMinutes = (now - progressStartedAt) / 60000;
 					const timeTarget = Math.min(ceiling, elapsedMinutes * 2);
-					this.lastPercentage = Math.min(ceiling, Math.max(this.lastPercentage, timeTarget));
+					const target = realTarget ?? timeTarget;
+					this.lastPercentage = Math.min(ceiling, Math.max(this.lastPercentage, target));
 
 					const percentage = Math.min(99, Math.round(this.lastPercentage));
 					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
