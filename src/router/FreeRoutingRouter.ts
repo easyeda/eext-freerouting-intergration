@@ -224,6 +224,7 @@ export class FreeRoutingRouter {
 			let logUnrouted: number | null = null;
 			const progressStartedAt = Date.now();
 
+			// eslint-disable-next-line complexity
 			const poll = async () => {
 				if (this.cancelled) {
 					resolve('CANCELLED');
@@ -335,7 +336,7 @@ export class FreeRoutingRouter {
 					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
 					const changed = currentStage !== lastStage || currentPass !== lastPass || effectiveIncomplete !== lastUnrouted;
 					if (changed || message !== lastMessage) {
-						if (changed) this.onLog?.(message, 'info');
+						this.onLog?.(message, 'info');
 						this.onProgress?.({ stage: stageText, percentage, message });
 						lastStage = currentStage;
 						lastPass = currentPass;

@@ -141,6 +141,10 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
 			logFn?.(message, level);
+			// 直接布线没有面板日志，同步写一份到 EDA 日志，便于排查进度停住的位置
+			if (!logFn) {
+				logToPanel(message, level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info');
+			}
 		},
 	);
 
