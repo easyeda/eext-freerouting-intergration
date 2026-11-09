@@ -119,7 +119,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	}
 
 	routeStartTime = Date.now();
-	logToPanel(`${t('Routing started')} - ${new Date(routeStartTime).toLocaleTimeString()}`);
+	logToPanel(`${t('Routing started')} (v${extensionConfig.version}) - ${new Date(routeStartTime).toLocaleTimeString()}`);
 
 	if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(0, t('Starting auto-routing...'));
 
@@ -202,6 +202,7 @@ export function stopRoute(): void {
 
 export async function autoRouteCustom(): Promise<void> {
 	ensureIframeSubscribed();
+	logToPanel(`Custom Auto Route panel opened (v${extensionConfig.version})`);
 
 	await eda.sys_IFrame.openIFrame('./iframe/routing.html', 800, 600, IFRAME_ID, {
 		maximizeButton: true,

@@ -96,11 +96,11 @@
         applyI18n();
 
         function getEda() {
-            try {
-                if (window.parent && window.parent.eda) return window.parent.eda;
-                if (window.top && window.top.eda) return window.top.eda;
-                if (window.eda) return window.eda;
-            } catch (e) {}
+            // iframe 内优先使用 EDA 注入的直接 eda 对象，parent.eda 可能属于不同上下文
+            try { if (typeof eda !== 'undefined' && eda) return eda; } catch (e) {}
+            try { if (window.eda) return window.eda; } catch (e) {}
+            try { if (window.parent && window.parent.eda) return window.parent.eda; } catch (e) {}
+            try { if (window.top && window.top.eda) return window.top.eda; } catch (e) {}
             return null;
         }
 

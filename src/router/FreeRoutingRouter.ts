@@ -4,7 +4,7 @@
  */
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
-import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
+import { JobResponse, JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
 import { fileToBase64 } from '../utils/base64';
 import { t } from '../utils/toast';
 
@@ -13,6 +13,30 @@ export type LogCallback = (message: string, level: string) => void;
 
 /** 真实进度不变时的爬升间隔 (毫秒) */
 const CREEP_INTERVAL = 3000;
+/** 查询任务状态的最长等待时间 (毫秒) */
+const STATUS_TIMEOUT = 10000;
+/** 本地请求/文件处理的最长等待时间 (毫秒) */
+const REQUEST_TIMEOUT = 60000;
+/** 获取最终结果的最长等待时间 (毫秒) */
+const RESULT_TIMEOUT = 30000;
+/** 导入 SES / 执行 DRC 的最长等待时间 (毫秒) */
+const IMPORT_TIMEOUT = 120000;
+
+function withTimeout<T>(promise: Promise<T>, timeout: number, message: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(new Error(message)), timeout);
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
 
 export interface RouteResult {
 	success: boolean;
@@ -67,7 +91,11 @@ export class FreeRoutingRouter {
 			this.checkCancelled();
 
 			this.onLog?.(t('Getting DSN file...'), 'info');
-			const dsnFile = await eda.pcb_ManufactureData.getDsnFile('design.dsn');
+			const dsnFile = await withTimeout(
+				eda.pcb_ManufactureData.getDsnFile('design.dsn'),
+				REQUEST_TIMEOUT,
+				t('Timed out while getting DSN file'),
+			);
 			if (!dsnFile) {
 				throw new Error(t('Failed to get DSN file, please make sure a PCB document is open'));
 			}
@@ -77,7 +105,7 @@ export class FreeRoutingRouter {
 			this.checkCancelled();
 
 			this.onLog?.(t('Encoding DSN file...'), 'info');
-			const dsnBase64 = await fileToBase64(dsnFile);
+			const dsnBase64 = await withTimeout(fileToBase64(dsnFile), REQUEST_TIMEOUT, t('Timed out while encoding DSN file'));
 
 			this.checkCancelled();
 
@@ -118,7 +146,11 @@ export class FreeRoutingRouter {
 			if (finalState === 'COMPLETED') {
 				this.onLog?.(t('Routing complete, fetching results...'), 'success');
 
-				const jobStatus = await FreeRoutingAPI.getJobStatus(job.id);
+				const jobStatus = await withTimeout(
+					FreeRoutingAPI.getJobStatus(job.id),
+					RESULT_TIMEOUT,
+					t('Timed out while fetching routing results'),
+				);
 				const stats = jobStatus.output?.statistics;
 				const liveStats = jobStatus.statistics;
 				const nets = stats?.nets?.totalCount ?? stats?.nets?.total_count ?? liveStats?.total_nets ?? 0;
@@ -126,20 +158,24 @@ export class FreeRoutingRouter {
 				const traces = stats?.traces?.totalCount ?? stats?.traces?.total_count ?? 0;
 				this.onLog?.(`${t('Stats: nets ')}${nets}${t(' routed | vias ')}${vias}${t(' traces ')}${traces}`, 'info');
 
-				const output = await FreeRoutingAPI.getJobOutput(job.id);
+				const output = await withTimeout(FreeRoutingAPI.getJobOutput(job.id), RESULT_TIMEOUT, t('Timed out while fetching routing results'));
 
 				this.onLog?.(t('Importing final results...'), 'info');
 				this.onProgress?.({ stage: '', percentage: 97, message: t('Importing final results...') });
 				await eda.pcb_Document.startCalculatingRatline();
 				await deletePrimitives(await collectRouteIds());
 				const filename = output.filename || 'routing_result.ses';
-				const success = await SESImporter.import(output.data, filename);
+				const success = await withTimeout(
+					SESImporter.import(output.data, filename),
+					IMPORT_TIMEOUT,
+					t('Timed out while importing routing results'),
+				);
 				if (success) {
 					this.onLog?.(t('SES file imported'), 'success');
 					if (!options.skipDrc) {
 						this.onLog?.(t('Running DRC check...'), 'info');
 						this.onProgress?.({ stage: '', percentage: 99, message: t('Running DRC check...') });
-						await eda.pcb_Drc.check(true, true, false);
+						await withTimeout(eda.pcb_Drc.check(true, true, false), IMPORT_TIMEOUT, t('Timed out while running DRC'));
 						this.onLog?.(t('DRC check complete'), 'success');
 					}
 					this.onProgress?.({ stage: '', percentage: 100, message: t('SES file imported') });
@@ -183,6 +219,7 @@ export class FreeRoutingRouter {
 			let total = totalConnections > 0 ? totalConnections : 0;
 			let seenUnrouted = false;
 			let nextDelay = POLL_INTERVAL;
+			let compactWarned = false;
 
 			const poll = async () => {
 				if (this.cancelled) {
@@ -191,7 +228,21 @@ export class FreeRoutingRouter {
 				}
 
 				try {
-					const status = await FreeRoutingAPI.getJobStatusCompact(jobId);
+					let status: JobResponse;
+					try {
+						status = await withTimeout(
+							FreeRoutingAPI.getJobStatusCompact(jobId),
+							STATUS_TIMEOUT,
+							t('Timed out while fetching routing status'),
+						);
+					} catch (compactError) {
+						// compact 查询不可用时回退完整状态，至少保证能检测到任务完成
+						if (!compactWarned) {
+							compactWarned = true;
+							this.onLog?.(t('Realtime status unavailable, progress may be inaccurate'), 'warn');
+						}
+						status = await withTimeout(FreeRoutingAPI.getJobStatus(jobId), STATUS_TIMEOUT, t('Timed out while fetching routing status'));
+					}
 
 					if (this.cancelled) {
 						resolve('CANCELLED');
@@ -283,7 +334,7 @@ export class FreeRoutingRouter {
 					if (now - lastPreviewTime >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
 						lastPreviewTime = now;
 						try {
-							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);
+							const partial = await withTimeout(FreeRoutingAPI.getJobOutputPartial(jobId), STATUS_TIMEOUT, 'preview timeout');
 							if (this.cancelled) {
 								resolve('CANCELLED');
 								return;
