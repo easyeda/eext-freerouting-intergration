@@ -168,6 +168,20 @@
         }
         edaObj = getEda();
 
+        function getEdaCandidates() {
+            var list = [];
+            function add(candidate) {
+                try {
+                    if (candidate && list.indexOf(candidate) === -1) list.push(candidate);
+                } catch (e) {}
+            }
+            try { if (typeof eda !== 'undefined') add(eda); } catch (e) {}
+            try { if (window.eda) add(window.eda); } catch (e) {}
+            try { if (window.parent && window.parent.eda) add(window.parent.eda); } catch (e) {}
+            try { if (window.top && window.top.eda) add(window.top.eda); } catch (e) {}
+            return list;
+        }
+
         function t(tag) {
             if (!edaObj) edaObj = getEda();
             if (edaObj && edaObj.sys_I18n) return edaObj.sys_I18n.text(tag);
@@ -194,14 +208,23 @@
                 _reqId: Date.now().toString(36) + Math.random().toString(36).slice(2)
             }, data);
             var eda = getEda();
-            if (!eda || !eda.sys_MessageBus) {
-                log(t('eda_failed'), 'error');
-                return false;
-            }
             var sent = false;
-            // 私有总线与公共总线都尝试，避免 iframe 与扩展不在同一个私有总线实例
-            try { eda.sys_MessageBus.publish('freerouting-iframe', payload); sent = true; } catch (e) {}
-            try { eda.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); sent = true; } catch (e) {}
+            if (eda && eda.sys_MessageBus) {
+                // 私有总线与公共总线都尝试，避免 iframe 与扩展不在同一个私有总线实例
+                try { eda.sys_MessageBus.publish('freerouting-iframe', payload); sent = true; } catch (e) {}
+                try { eda.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); sent = true; } catch (e) {}
+            }
+            // 浏览器版 EDA 中消息总线可能跨上下文不可达，兜底写入扩展存储
+            var candidates = getEdaCandidates();
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                if (!candidate || !candidate.sys_Storage) continue;
+                try {
+                    var r = candidate.sys_Storage.setExtensionUserConfig('__fr_custom_cmd__', JSON.stringify(payload));
+                    if (r && r.catch) r.catch(function() {});
+                    sent = true;
+                } catch (e) {}
+            }
             if (!sent) log(t('eda_failed'), 'error');
             return sent;
         }
@@ -332,8 +355,11 @@
             pinged = true;
             sendToExtension('ping', {});
             setTimeout(function() {
-                if (!pongReceived) log(t('Extension not responding, please restart the client'), 'error');
+                if (!pongReceived) sendToExtension('ping', {});
             }, 2000);
+            setTimeout(function() {
+                if (!pongReceived) log(t('Extension not responding, please restart the client'), 'error');
+            }, 4000);
         }
 
         function bindLog() {
@@ -345,6 +371,37 @@
             try { eda.sys_MessageBus.subscribePublic('freerouting-log-public', handleLogMessage); bound = true; } catch (e) {}
             if (bound) logBound = true;
             return bound;
+        }
+
+        function processStorageEvents(raw) {
+            if (!raw) return;
+            var events;
+            try {
+                events = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                return;
+            }
+            if (!events || !events.length) return;
+            for (var i = 0; i < events.length; i++) {
+                if (events[i]) handleLogMessage(events[i]);
+            }
+        }
+
+        function pollStorageEvents() {
+            var candidates = getEdaCandidates();
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                var storage = candidate && candidate.sys_Storage;
+                if (!storage) continue;
+                try {
+                    var raw = storage.getExtensionUserConfig('__fr_custom_events__');
+                    if (raw && typeof raw.then === 'function') {
+                        raw.then(processStorageEvents, function() {});
+                    } else {
+                        processStorageEvents(raw);
+                    }
+                } catch (e) {}
+            }
         }
 
         function initMessageBus() {
@@ -367,6 +424,7 @@
 
         // 尽早绑定日志订阅，避免语言检测期间丢失启动阶段日志
         initMessageBus();
+        setInterval(pollStorageEvents, 500);
 
         // Re-apply i18n once the EDA object is available; message bus is initialized unconditionally above
         (function detectEdaThenInit() {

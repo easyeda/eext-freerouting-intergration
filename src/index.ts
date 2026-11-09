@@ -49,6 +49,54 @@ function pushMessageToIFrame(payload: Record<string, unknown>): void {
 	try {
 		eda.sys_MessageBus.publishPublic('freerouting-log-public', payload);
 	} catch (_) {}
+	appendStorageEvent(payload);
+}
+
+const CMD_KEY = '__fr_custom_cmd__';
+const EVENTS_KEY = '__fr_custom_events__';
+
+/**
+ * 消息总线在浏览器版 EDA 中可能跨上下文不可达，额外把事件写入扩展存储
+ * 自定义面板会轮询这个存储作为兜底通道。
+ */
+function appendStorageEvent(payload: Record<string, unknown>): void {
+	try {
+		const raw = eda.sys_Storage.getExtensionUserConfig(EVENTS_KEY);
+		let events: unknown[] = [];
+		try {
+			events = raw ? (JSON.parse(raw as string) as unknown[]) : [];
+		} catch (_) {
+			events = [];
+		}
+		if (!Array.isArray(events)) events = [];
+		events.push(payload);
+		if (events.length > 100) events = events.slice(-100);
+		void eda.sys_Storage.setExtensionUserConfig(EVENTS_KEY, JSON.stringify(events));
+	} catch (_) {}
+}
+
+let storagePollTimer: ReturnType<typeof setInterval> | undefined;
+
+function stopStorageCommandPoll(): void {
+	if (storagePollTimer) {
+		clearInterval(storagePollTimer);
+		storagePollTimer = undefined;
+	}
+}
+
+function startStorageCommandPoll(): void {
+	stopStorageCommandPoll();
+	let lastCmdId = '';
+	storagePollTimer = setInterval(() => {
+		try {
+			const raw = eda.sys_Storage.getExtensionUserConfig(CMD_KEY);
+			if (!raw) return;
+			const cmd = JSON.parse(raw as string) as { type?: string; options?: RoutingOptions & { autoDrc?: boolean }; _reqId?: string };
+			if (!cmd || !cmd.type || !cmd._reqId || cmd._reqId === lastCmdId) return;
+			lastCmdId = cmd._reqId;
+			void handleIframeMessage({ type: cmd.type, options: cmd.options, _reqId: cmd._reqId });
+		} catch (_) {}
+	}, 500);
 }
 
 let messageSeq = 0;
@@ -222,12 +270,20 @@ export async function autoRouteCustom(): Promise<void> {
 	ensureIframeSubscribed();
 	logToPanel(`Custom Auto Route panel opened (v${extensionConfig.version})`);
 
+	// 清掉上一次面板遗留的存储命令/事件，并启动存储兜底通道
+	try {
+		await eda.sys_Storage.setExtensionUserConfig(CMD_KEY, '');
+		await eda.sys_Storage.setExtensionUserConfig(EVENTS_KEY, '[]');
+	} catch (_) {}
+	startStorageCommandPoll();
+
 	await eda.sys_IFrame.openIFrame('./iframe/routing.html', 800, 600, IFRAME_ID, {
 		maximizeButton: true,
 		minimizeButton: true,
 		title: t('Custom Auto Route'),
 		buttonCallbackFn: (button: string) => {
 			if (button === 'close') {
+				stopStorageCommandPoll();
 				stopRoute();
 			}
 		},
