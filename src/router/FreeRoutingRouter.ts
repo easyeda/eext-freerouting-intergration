@@ -4,7 +4,7 @@
  */
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
-import { JobResponse, JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
+import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
 import { fileToBase64 } from '../utils/base64';
 import { t } from '../utils/toast';
 
@@ -19,7 +19,7 @@ const REQUEST_TIMEOUT = 60000;
 const RESULT_TIMEOUT = 30000;
 /** 导入 SES / 执行 DRC 的最长等待时间 (毫秒) */
 const IMPORT_TIMEOUT = 120000;
-/** compact 不可用时，拉取任务日志的间隔 (毫秒) */
+/** 拉取任务日志的间隔 (毫秒) */
 const LOGS_INTERVAL = 10000;
 /** 拉取任务日志的超时时间 (毫秒) */
 const LOGS_TIMEOUT = 5000;
@@ -220,9 +220,6 @@ export class FreeRoutingRouter {
 			let total = totalConnections > 0 ? totalConnections : 0;
 			let seenUnrouted = false;
 			let nextDelay = POLL_INTERVAL;
-			let compactWarned = false;
-			// compact 接口在部分板子/版本上会 500，本次会话内一旦失败就不再尝试
-			let useCompact = !(globalThis as any).__fr_compact_disabled__;
 			let lastLogsTime = 0;
 			let logBaseline = 0;
 			let logUnrouted: number | null = null;
@@ -235,31 +232,11 @@ export class FreeRoutingRouter {
 				}
 
 				try {
-					let status: JobResponse;
-					if (useCompact) {
-						try {
-							status = await withTimeout(
-								FreeRoutingAPI.getJobStatusCompact(jobId),
-								STATUS_TIMEOUT,
-								t('Timed out while fetching routing status'),
-							);
-						} catch (compactError) {
-							// compact 查询不可用（例如服务端 500）时，后续直接使用完整状态
-							useCompact = false;
-							(globalThis as any).__fr_compact_disabled__ = true;
-							if (!compactWarned) {
-								compactWarned = true;
-								this.onLog?.(t('Realtime status unavailable, progress may be inaccurate'), 'warn');
-							}
-							status = await withTimeout(
-								FreeRoutingAPI.getJobStatus(jobId),
-								STATUS_TIMEOUT,
-								t('Timed out while fetching routing status'),
-							);
-						}
-					} else {
-						status = await withTimeout(FreeRoutingAPI.getJobStatus(jobId), STATUS_TIMEOUT, t('Timed out while fetching routing status'));
-					}
+					const status = await withTimeout(
+						FreeRoutingAPI.getJobStatus(jobId),
+						STATUS_TIMEOUT,
+						t('Timed out while fetching routing status'),
+					);
 
 					if (this.cancelled) {
 						resolve('CANCELLED');
@@ -284,8 +261,8 @@ export class FreeRoutingRouter {
 					const currentPass = status.current_pass || 0;
 					const now = Date.now();
 
-					// compact 不可用时，从任务日志中解析真实未布通数量
-					if (!useCompact && now - lastLogsTime >= LOGS_INTERVAL) {
+					// 从任务日志中解析真实未布通数量
+					if (now - lastLogsTime >= LOGS_INTERVAL) {
 						lastLogsTime = now;
 						try {
 							const entries = await withTimeout(FreeRoutingAPI.getJobLogs(jobId), LOGS_TIMEOUT, 'logs timeout');
@@ -360,7 +337,7 @@ export class FreeRoutingRouter {
 						if (statsReady && effectiveIncomplete === 0) realTarget = 90;
 					}
 
-					// 没有实时统计（compact 查询失败）时按每分钟 2% 平滑推进，避免瞬间跳到某个百分比后停住
+					// 日志数据也拿不到时按每分钟 2% 平滑推进，避免瞬间跳到某个百分比后停住
 					const elapsedMinutes = (now - progressStartedAt) / 60000;
 					const timeTarget = Math.min(ceiling, elapsedMinutes * 2);
 					const target = Math.max(timeTarget, realTarget ?? 0);

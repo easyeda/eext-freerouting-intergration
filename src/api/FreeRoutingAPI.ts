@@ -80,16 +80,8 @@ export class FreeRoutingAPI {
 	}
 
 	/**
-	 * 获取任务实时状态（compact=true）
-	 * 布线过程中会返回 statistics.unrouted_connections，可用于计算真实进度
-	 */
-	static getJobStatusCompact(jobId: string): Promise<JobResponse> {
-		return request('GET', `/jobs/${jobId}?compact=true`);
-	}
-
-	/**
 	 * 获取任务日志
-	 * 用于 compact 状态接口不可用时，从每轮日志中解析真实未布通数量
+	 * 用于从每轮日志中解析真实未布通数量
 	 */
 	static getJobLogs(jobId: string): Promise<JobLogEntry[]> {
 		return request('GET', `/jobs/${jobId}/logs`);
