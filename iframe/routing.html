@@ -319,6 +319,9 @@
             }
         }
 
+        // 尽早绑定日志订阅，避免语言检测期间丢失启动阶段日志
+        initMessageBus();
+
         // Detect EDA, re-apply i18n with real translations, then init message bus
         (function detectEdaThenInit() {
             var retries = 0;

@@ -1,7 +1,6 @@
 /**
  * FreeRouting REST API 客户端
  */
-
 import { API_BASE_URL, JobOutputResponse, JobResponse, RouterSettings, SessionResponse, SystemStatusResponse } from '../types';
 
 async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {

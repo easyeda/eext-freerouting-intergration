@@ -2,10 +2,10 @@
  * 入口文件
  */
 import * as extensionConfig from '../extension.json';
-import { FreeRoutingRouter, RouteResult } from './router/FreeRoutingRouter';
 import { FreeRoutingAPI } from './api/FreeRoutingAPI';
+import { FreeRoutingRouter, RouteResult } from './router/FreeRoutingRouter';
 import { QUICK_ROUTE_OPTIONS, RoutingOptions } from './types';
-import { showInfo, showSuccess, showError, showWarning, t } from './utils/toast';
+import { showError, showInfo, showSuccess, showWarning, t } from './utils/toast';
 
 const IFRAME_ID = 'freerouting-config';
 const SERVICE_DIALOG_ID = 'freerouting-service-dialog';
@@ -23,7 +23,12 @@ function setRouter(r: FreeRoutingRouter | null): void {
 	G[ROUTER_KEY] = r;
 }
 function tryLock(): boolean {
-	if (G[LOCK_KEY]) return false;
+	if (G[LOCK_KEY]) {
+		const router = getRouter();
+		// 路由器已不存在或已结束，视为上一次布线遗留的锁，直接回收
+		if (router && router.isActive()) return false;
+		unlock();
+	}
 	G[LOCK_KEY] = true;
 	return true;
 }
@@ -68,11 +73,19 @@ export function about(): void {
 
 async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: string) => void, showProgress = true): Promise<void> {
 	if (!tryLock()) {
+		const message = t('Routing in progress, please stop current routing first');
+		showWarning(message, 5);
+		logToPanel(message, 'warn');
+		logFn?.(message, 'warn');
 		return;
 	}
 
 	logFn?.(t('Checking FreeRouting service...'), 'info');
-	const serviceStatus = await FreeRoutingAPI.checkService();
+	// 服务检测最长等待 10 秒，避免请求挂起时界面无任何反馈
+	const serviceStatus = await Promise.race([
+		FreeRoutingAPI.checkService(),
+		new Promise<'unavailable'>((resolve) => setTimeout(() => resolve('unavailable'), 10000)),
+	]);
 	if (serviceStatus === 'permission-denied') {
 		unlock();
 		const message = t(
@@ -93,8 +106,17 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	}
 	logFn?.(t('FreeRouting service detected'), 'success');
 
-	await eda.pcb_Document.stopCalculatingRatline();
-	await eda.pcb_Layer.setLayerInvisible(57 as any);
+	try {
+		await eda.pcb_Document.stopCalculatingRatline();
+		await eda.pcb_Layer.setLayerInvisible(57 as any);
+	} catch (error) {
+		unlock();
+		const message = `${t('Error: ')}${error instanceof Error ? error.message : String(error)}`;
+		showError(message);
+		logToPanel(message, 'error');
+		logFn?.(message, 'error');
+		return;
+	}
 
 	routeStartTime = Date.now();
 	logToPanel(`${t('Routing started')} - ${new Date(routeStartTime).toLocaleTimeString()}`);
@@ -167,43 +189,42 @@ export function stopRoute(): void {
 	const router = getRouter();
 	if (router && router.isActive()) {
 		router.cancel();
-		setRouter(null);
-		unlock();
-		eda.sys_LoadingAndProgressBar.destroyProgressBar();
 	}
+	// 无论是否还有活动路由都释放锁，避免上一次异常中断后无法再次启动
+	setRouter(null);
+	unlock();
+	eda.sys_LoadingAndProgressBar.destroyProgressBar();
+	try {
+		void eda.pcb_Document.startCalculatingRatline().catch(() => {});
+		void eda.pcb_Layer.setLayerVisible(57 as any).catch(() => {});
+	} catch (_) {}
 }
 
 export async function autoRouteCustom(): Promise<void> {
 	ensureIframeSubscribed();
 
-	await eda.sys_IFrame.openIFrame(
-		'./iframe/routing.html',
-		800,
-		600,
-		IFRAME_ID,
-		{
-			maximizeButton: true,
-			minimizeButton: true,
-			title: t('Custom Auto Route'),
-			buttonCallbackFn: (button: string) => {
-				if (button === 'close') {
-					stopRoute();
-				}
-			},
-		} as any,
-	);
+	await eda.sys_IFrame.openIFrame('./iframe/routing.html', 800, 600, IFRAME_ID, {
+		maximizeButton: true,
+		minimizeButton: true,
+		title: t('Custom Auto Route'),
+		buttonCallbackFn: (button: string) => {
+			if (button === 'close') {
+				stopRoute();
+			}
+		},
+	} as any);
 }
 
 function ensureIframeSubscribed(): void {
 	if (G[SUB_KEY]) return;
-	G[SUB_KEY] = true;
 
-	eda.sys_MessageBus.subscribe(
-		'freerouting-iframe',
-		async (message: { type: string; options?: RoutingOptions & { autoDrc?: boolean } }) => {
+	try {
+		eda.sys_MessageBus.subscribe('freerouting-iframe', async (message: { type: string; options?: RoutingOptions & { autoDrc?: boolean } }) => {
 			switch (message.type) {
 				case 'start-custom':
 					if (message.options) {
+						logToPanel(t('Starting auto-routing...'));
+						pushLogToIFrame(t('Starting auto-routing...'), 'info');
 						const opts: RoutingOptions = {
 							maxPasses: message.options.maxPasses,
 							enableJlcPostprocess: message.options.enableJlcPostprocess ?? true,
@@ -213,15 +234,27 @@ function ensureIframeSubscribed(): void {
 						if (!autoDrc) {
 							opts.skipDrc = true;
 						}
-						await runRoute(opts, pushLogToIFrame, false);
+						try {
+							await runRoute(opts, pushLogToIFrame, false);
+						} catch (error) {
+							unlock();
+							const msg = `${t('Error: ')}${error instanceof Error ? error.message : String(error)}`;
+							showError(msg);
+							logToPanel(msg, 'error');
+							pushLogToIFrame(msg, 'error');
+						}
 					}
 					break;
 				case 'stop':
 					stopRoute();
 					break;
 			}
-		},
-	);
+		});
+		G[SUB_KEY] = true;
+	} catch (error) {
+		// 订阅失败时不置位，下次打开面板会重试
+		console.error('[FreeRouting] failed to subscribe custom iframe messages:', error);
+	}
 }
 
 function showServiceNotFoundDialog(
@@ -231,20 +264,17 @@ function showServiceNotFoundDialog(
 ): void {
 	if (!G[SVC_SUB_KEY]) {
 		G[SVC_SUB_KEY] = true;
-		eda.sys_MessageBus.subscribe(
-			'freerouting-service-dialog',
-			async (message: { type: string }) => {
-				if (message.type === 'retry') {
-					eda.sys_IFrame.closeIFrame(SERVICE_DIALOG_ID);
-					const opts = G.__fr_pending_opts__;
-					const logFn = G.__fr_pending_logfn__;
-					const showProg = G.__fr_pending_showprog__;
-					if (opts) {
-						await runRoute(opts, logFn, showProg);
-					}
+		eda.sys_MessageBus.subscribe('freerouting-service-dialog', async (message: { type: string }) => {
+			if (message.type === 'retry') {
+				eda.sys_IFrame.closeIFrame(SERVICE_DIALOG_ID);
+				const opts = G.__fr_pending_opts__;
+				const logFn = G.__fr_pending_logfn__;
+				const showProg = G.__fr_pending_showprog__;
+				if (opts) {
+					await runRoute(opts, logFn, showProg);
 				}
-			},
-		);
+			}
+		});
 	}
 
 	G.__fr_pending_opts__ = pendingOptions;

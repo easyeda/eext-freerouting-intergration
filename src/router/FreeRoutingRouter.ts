@@ -2,7 +2,6 @@
  * FreeRouting 路由器
  * 核心布线控制器，协调 DSN 获取、REST API 通信和 SES 导入
  */
-
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
 import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
@@ -263,11 +262,7 @@ export class FreeRoutingRouter {
 					if (target > this.lastPercentage) {
 						this.lastPercentage = Math.min(ceiling, target);
 						lastAdvanceTime = now;
-					} else if (
-						this.lastPercentage < ceiling &&
-						status.state === 'RUNNING' &&
-						now - lastAdvanceTime >= CREEP_INTERVAL
-					) {
+					} else if (this.lastPercentage < ceiling && status.state === 'RUNNING' && now - lastAdvanceTime >= CREEP_INTERVAL) {
 						const step = Math.max(0.2, (ceiling - this.lastPercentage) * 0.02);
 						this.lastPercentage = Math.min(ceiling, this.lastPercentage + step);
 						lastAdvanceTime = now;
@@ -285,7 +280,7 @@ export class FreeRoutingRouter {
 						lastMessage = message;
 					}
 
-					if ((now - lastPreviewTime) >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
+					if (now - lastPreviewTime >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
 						lastPreviewTime = now;
 						try {
 							const partial = await FreeRoutingAPI.getJobOutputPartial(jobId);

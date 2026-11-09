@@ -94,7 +94,17 @@ export interface JobLiveStatistics {
 /**
  * 任务状态
  */
-export type JobState = 'QUEUED' | 'READY_TO_START' | 'RUNNING' | 'PAUSED' | 'STOPPING' | 'COMPLETED' | 'CANCELLED' | 'FAILED' | 'TIMED_OUT' | 'TERMINATED';
+export type JobState =
+	| 'QUEUED'
+	| 'READY_TO_START'
+	| 'RUNNING'
+	| 'PAUSED'
+	| 'STOPPING'
+	| 'COMPLETED'
+	| 'CANCELLED'
+	| 'FAILED'
+	| 'TIMED_OUT'
+	| 'TERMINATED';
 
 /**
  * 任务阶段
