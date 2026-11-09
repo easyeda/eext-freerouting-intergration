@@ -157,9 +157,19 @@
     (function() {
         'use strict';
 
-        // i18n helper using EDA sys_I18n
-        var edaObj = (typeof eda !== 'undefined') ? eda : (window.parent && window.parent.eda);
+        // 统一使用同一个 eda 对象：优先 iframe 内注入的 eda，其次 window.eda / parent
+        var edaObj = null;
+        function getEda() {
+            try { if (typeof eda !== 'undefined' && eda) return eda; } catch (e) {}
+            try { if (window.eda) return window.eda; } catch (e) {}
+            try { if (window.parent && window.parent.eda) return window.parent.eda; } catch (e) {}
+            try { if (window.top && window.top.eda) return window.top.eda; } catch (e) {}
+            return null;
+        }
+        edaObj = getEda();
+
         function t(tag) {
+            if (!edaObj) edaObj = getEda();
             if (edaObj && edaObj.sys_I18n) return edaObj.sys_I18n.text(tag);
             return tag;
         }
@@ -177,40 +187,21 @@
         // Apply default i18n (fallback tags)
         applyI18n();
 
-        function getEdaCandidates() {
-            var list = [];
-            function add(candidate) {
-                try {
-                    if (candidate && list.indexOf(candidate) === -1) list.push(candidate);
-                } catch (e) {}
-            }
-            try { if (typeof eda !== 'undefined') add(eda); } catch (e) {}
-            try { if (window.eda) add(window.eda); } catch (e) {}
-            try { if (window.parent && window.parent.eda) add(window.parent.eda); } catch (e) {}
-            try { if (window.top && window.top.eda) add(window.top.eda); } catch (e) {}
-            return list;
-        }
-
-        function getEda() {
-            var list = getEdaCandidates();
-            return list.length ? list[0] : null;
-        }
-
         function sendToExtension(type, data) {
             var payload = Object.assign({
                 type: type,
                 _token: sessionToken,
                 _reqId: Date.now().toString(36) + Math.random().toString(36).slice(2)
             }, data);
-            var candidates = getEdaCandidates();
-            var sent = false;
-            for (var i = 0; i < candidates.length; i++) {
-                var eda = candidates[i];
-                if (!eda || !eda.sys_MessageBus) continue;
-                // 私有总线与公共总线都尝试，避免 iframe 与扩展不在同一个私有总线实例
-                try { eda.sys_MessageBus.publish('freerouting-iframe', payload); sent = true; } catch (e) {}
-                try { eda.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); sent = true; } catch (e) {}
+            var eda = getEda();
+            if (!eda || !eda.sys_MessageBus) {
+                log(t('eda_failed'), 'error');
+                return false;
             }
+            var sent = false;
+            // 私有总线与公共总线都尝试，避免 iframe 与扩展不在同一个私有总线实例
+            try { eda.sys_MessageBus.publish('freerouting-iframe', payload); sent = true; } catch (e) {}
+            try { eda.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); sent = true; } catch (e) {}
             if (!sent) log(t('eda_failed'), 'error');
             return sent;
         }
@@ -347,14 +338,11 @@
 
         function bindLog() {
             if (logBound) return true;
-            var candidates = getEdaCandidates();
+            var eda = getEda();
+            if (!eda || !eda.sys_MessageBus) return false;
             var bound = false;
-            for (var i = 0; i < candidates.length; i++) {
-                var eda = candidates[i];
-                if (!eda || !eda.sys_MessageBus) continue;
-                try { eda.sys_MessageBus.subscribe('freerouting-log', handleLogMessage); bound = true; } catch (e) {}
-                try { eda.sys_MessageBus.subscribePublic('freerouting-log-public', handleLogMessage); bound = true; } catch (e) {}
-            }
+            try { eda.sys_MessageBus.subscribe('freerouting-log', handleLogMessage); bound = true; } catch (e) {}
+            try { eda.sys_MessageBus.subscribePublic('freerouting-log-public', handleLogMessage); bound = true; } catch (e) {}
             if (bound) logBound = true;
             return bound;
         }
@@ -380,18 +368,15 @@
         // 尽早绑定日志订阅，避免语言检测期间丢失启动阶段日志
         initMessageBus();
 
-        // Detect EDA, re-apply i18n with real translations, then init message bus
+        // Re-apply i18n once the EDA object is available; message bus is initialized unconditionally above
         (function detectEdaThenInit() {
             var retries = 0;
             function tryDetect() {
                 edaObj = getEda();
                 if (edaObj && edaObj.sys_I18n) {
                     applyI18n();
-                    initMessageBus();
                 } else if (++retries < 20) {
                     setTimeout(tryDetect, 200);
-                } else {
-                    initMessageBus();
                 }
             }
             tryDetect();
