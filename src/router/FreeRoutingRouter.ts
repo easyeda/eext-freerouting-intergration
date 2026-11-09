@@ -4,7 +4,7 @@
  */
 import { FreeRoutingAPI } from '../api/FreeRoutingAPI';
 import { SESImporter } from '../importer/SESImporter';
-import { JobState, POLL_INTERVAL, PREVIEW_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
+import { JobState, POLL_INTERVAL, RoutingOptions, RoutingProgress, RoutingStatistics } from '../types';
 import { fileToBase64 } from '../utils/base64';
 import { t } from '../utils/toast';
 
@@ -143,7 +143,7 @@ export class FreeRoutingRouter {
 			await FreeRoutingAPI.startJob(job.id);
 			this.onLog?.(t('Routing started!'), 'success');
 
-			const finalState = await this.pollProgress(job.id, dsnFilename, options.maxPasses);
+			const finalState = await this.pollProgress(job.id, options.maxPasses);
 
 			if (finalState === 'COMPLETED') {
 				this.onLog?.(t('Routing complete, fetching results...'), 'success');
@@ -208,7 +208,7 @@ export class FreeRoutingRouter {
 		if (this.cancelled) throw new Error('布线已取消');
 	}
 
-	private pollProgress(jobId: string, dsnFilename: string, maxPasses: number, totalConnections = 0): Promise<JobState> {
+	private pollProgress(jobId: string, maxPasses: number, totalConnections = 0): Promise<JobState> {
 		return new Promise((resolve) => {
 			this.pollResolve = resolve;
 			const TERMINAL_STATES: JobState[] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'TERMINATED'];
@@ -216,7 +216,6 @@ export class FreeRoutingRouter {
 			let lastPass = 0;
 			let lastUnrouted: number | null = null;
 			let lastMessage = '';
-			let lastPreviewTime = 0;
 			let total = totalConnections > 0 ? totalConnections : 0;
 			let nextDelay = POLL_INTERVAL;
 			let lastLogsTime = 0;
@@ -344,28 +343,8 @@ export class FreeRoutingRouter {
 						lastMessage = message;
 					}
 
-					if (now - lastPreviewTime >= PREVIEW_INTERVAL && status.state === 'RUNNING') {
-						lastPreviewTime = now;
-						try {
-							const partial = await withTimeout(FreeRoutingAPI.getJobOutputPartial(jobId), STATUS_TIMEOUT, 'preview timeout');
-							if (this.cancelled) {
-								resolve('CANCELLED');
-								return;
-							}
-							if (partial && partial.data) {
-								this.onLog?.(t('Updating preview...'), 'info');
-								await deletePrimitives(await collectRouteIds());
-								const filename = partial.filename || dsnFilename.replace(/\.dsn$/i, '.ses');
-								await SESImporter.import(partial.data, filename);
-							}
-						} catch (previewErr) {
-							console.warn('[FreeRouting] preview failed:', previewErr);
-						}
-						if (effectiveTotal > 0 && effectiveIncomplete != null) {
-							const routed = Math.max(0, effectiveTotal - effectiveIncomplete);
-							this.onLog?.(`${t('[Preview] routed: ')}${routed}/${effectiveTotal}${t(' | unrouted: ')}${effectiveIncomplete}`, 'info');
-						}
-					}
+					// 不再做过程中预览导入：每次 importAutoRouteSesFile 都会清空画布，
+					// 并向 EDA 共享进度组写入导入进度（常见为 66%），导致进度条被覆盖。
 				} catch (error) {
 					if (this.cancelled) {
 						resolve('CANCELLED');
