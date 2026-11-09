@@ -183,7 +183,11 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	// EDA 进度条把 title 当作进度条目 key：title 变化会不断新增条目，
 	// 显示值变成所有条目的平均值，最终卡在某个百分比。因此整个布线过程必须使用同一个 title。
 	const progressTitle = `${t('Auto-routing')} (v${extensionConfig.version})`;
-	if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(0, progressTitle);
+	if (showProgress) {
+		// EDA 的进度条组是共享的，先清空历史条目，确保本次只有一个进度条目
+		eda.sys_LoadingAndProgressBar.destroyProgressBar();
+		eda.sys_LoadingAndProgressBar.showProgressBar(0, progressTitle);
+	}
 
 	const router = new FreeRoutingRouter(
 		(progress) => {
