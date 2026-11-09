@@ -70,6 +70,8 @@
 	"Timed out while importing routing results": "导入布线结果超时",
 	"Timed out while running DRC": "DRC 检查超时",
 	"Realtime status unavailable, progress may be inaccurate": "无法获取实时布线状态，进度可能不准确",
+	"Extension connected": "扩展通信正常",
+	"Extension not responding, please restart the client": "扩展未响应，请重启客户端后重试",
 	"External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry": "未开启扩展的“外部交互”权限，请前往：高级 -> 扩展管理器 -> FreeRouting -> 配置，开启“允许外部交互”后重试",
 	"FreeRouting Service Not Running": "FreeRouting 服务未启动",
 	"max_passes_label": "最大轮数 (max_passes) <span class=\"param-help\" title=\"布线迭代次数\">ⓘ</span>",

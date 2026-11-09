@@ -177,20 +177,42 @@
         // Apply default i18n (fallback tags)
         applyI18n();
 
+        function getEdaCandidates() {
+            var list = [];
+            function add(candidate) {
+                try {
+                    if (candidate && list.indexOf(candidate) === -1) list.push(candidate);
+                } catch (e) {}
+            }
+            try { if (typeof eda !== 'undefined') add(eda); } catch (e) {}
+            try { if (window.eda) add(window.eda); } catch (e) {}
+            try { if (window.parent && window.parent.eda) add(window.parent.eda); } catch (e) {}
+            try { if (window.top && window.top.eda) add(window.top.eda); } catch (e) {}
+            return list;
+        }
+
         function getEda() {
-            // iframe 内优先使用 EDA 注入的直接 eda 对象，parent.eda 可能属于不同上下文
-            try { if (typeof eda !== 'undefined' && eda) return eda; } catch (e) {}
-            try { if (window.eda) return window.eda; } catch (e) {}
-            try { if (window.parent && window.parent.eda) return window.parent.eda; } catch (e) {}
-            try { if (window.top && window.top.eda) return window.top.eda; } catch (e) {}
-            return null;
+            var list = getEdaCandidates();
+            return list.length ? list[0] : null;
         }
 
         function sendToExtension(type, data) {
-            var eda = getEda();
-            if (eda && eda.sys_MessageBus) {
-                eda.sys_MessageBus.publish('freerouting-iframe', Object.assign({ type: type, _token: sessionToken }, data));
+            var payload = Object.assign({
+                type: type,
+                _token: sessionToken,
+                _reqId: Date.now().toString(36) + Math.random().toString(36).slice(2)
+            }, data);
+            var candidates = getEdaCandidates();
+            var sent = false;
+            for (var i = 0; i < candidates.length; i++) {
+                var eda = candidates[i];
+                if (!eda || !eda.sys_MessageBus) continue;
+                // 私有总线与公共总线都尝试，避免 iframe 与扩展不在同一个私有总线实例
+                try { eda.sys_MessageBus.publish('freerouting-iframe', payload); sent = true; } catch (e) {}
+                try { eda.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); sent = true; } catch (e) {}
             }
+            if (!sent) log(t('eda_failed'), 'error');
+            return sent;
         }
 
         var sessionToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -290,33 +312,69 @@
             }
         });
 
+        var seenMessageIds = {};
+        var pongReceived = false;
+        var pinged = false;
+
+        function handleLogMessage(msg) {
+            if (msg && msg._id) {
+                if (seenMessageIds[msg._id]) return;
+                seenMessageIds[msg._id] = true;
+            }
+            if (msg && msg.type === 'pong') {
+                if (!pongReceived) {
+                    pongReceived = true;
+                    log(t('Extension connected'), 'success');
+                }
+                return;
+            }
+            if (msg && msg.type === 'log') {
+                log(msg.message, msg.level || 'info');
+            } else if (msg && msg.type === 'done') {
+                log(msg.message || t('routing_done'), msg.level || 'success');
+                setUI(false);
+            }
+        }
+
+        function pingExtension() {
+            if (pinged) return;
+            pinged = true;
+            sendToExtension('ping', {});
+            setTimeout(function() {
+                if (!pongReceived) log(t('Extension not responding, please restart the client'), 'error');
+            }, 2000);
+        }
+
         function bindLog() {
             if (logBound) return true;
-            var eda = getEda();
-            if (!eda || !eda.sys_MessageBus) return false;
-            logBound = true;
-
-            eda.sys_MessageBus.subscribe('freerouting-log', function(msg) {
-                if (msg && msg.type === 'log') {
-                    log(msg.message, msg.level || 'info');
-                } else if (msg && msg.type === 'done') {
-                    log(msg.message || t('routing_done'), msg.level || 'success');
-                    setUI(false);
-                }
-            });
-            return true;
+            var candidates = getEdaCandidates();
+            var bound = false;
+            for (var i = 0; i < candidates.length; i++) {
+                var eda = candidates[i];
+                if (!eda || !eda.sys_MessageBus) continue;
+                try { eda.sys_MessageBus.subscribe('freerouting-log', handleLogMessage); bound = true; } catch (e) {}
+                try { eda.sys_MessageBus.subscribePublic('freerouting-log-public', handleLogMessage); bound = true; } catch (e) {}
+            }
+            if (bound) logBound = true;
+            return bound;
         }
 
         function initMessageBus() {
-            if (!bindLog()) {
-                var retries = 0;
-                var retryTimer = setInterval(function() {
-                    if (bindLog() || ++retries > 10) {
-                        clearInterval(retryTimer);
-                        if (!logBound) log(t('eda_failed'), 'error');
-                    }
-                }, 500);
+            if (bindLog()) {
+                pingExtension();
+                return;
             }
+            var retries = 0;
+            var retryTimer = setInterval(function() {
+                if (bindLog() || ++retries > 10) {
+                    clearInterval(retryTimer);
+                    if (!logBound) {
+                        log(t('eda_failed'), 'error');
+                    } else {
+                        pingExtension();
+                    }
+                }
+            }, 500);
         }
 
         // 尽早绑定日志订阅，避免语言检测期间丢失启动阶段日志

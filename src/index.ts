@@ -42,16 +42,27 @@ function logToPanel(message: string, type: 'info' | 'warn' | 'error' = 'info'): 
 	eda.sys_Log.add(`[FreeRouting] ${message}`, type as any);
 }
 
-function pushLogToIFrame(message: string, level = 'info'): void {
+function pushMessageToIFrame(payload: Record<string, unknown>): void {
 	try {
-		eda.sys_MessageBus.publish('freerouting-log', { type: 'log', message, level });
+		eda.sys_MessageBus.publish('freerouting-log', payload);
+	} catch (_) {}
+	try {
+		eda.sys_MessageBus.publishPublic('freerouting-log-public', payload);
 	} catch (_) {}
 }
 
+let messageSeq = 0;
+function nextMessageId(): string {
+	messageSeq++;
+	return `${Date.now()}-${messageSeq}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function pushLogToIFrame(message: string, level = 'info'): void {
+	pushMessageToIFrame({ type: 'log', message, level, _id: nextMessageId() });
+}
+
 function pushDoneToIFrame(message: string, level = 'success'): void {
-	try {
-		eda.sys_MessageBus.publish('freerouting-log', { type: 'done', message, level });
-	} catch (_) {}
+	pushMessageToIFrame({ type: 'done', message, level, _id: nextMessageId() });
 }
 
 function formatDuration(ms: number): string {
@@ -216,46 +227,71 @@ export async function autoRouteCustom(): Promise<void> {
 	} as any);
 }
 
+interface CustomIframeMessage {
+	type: string;
+	options?: RoutingOptions & { autoDrc?: boolean };
+	_reqId?: string;
+}
+
+async function handleIframeMessage(message: CustomIframeMessage): Promise<void> {
+	// 私有/公共总线可能各投递一次，按请求 ID 去重
+	if (message._reqId) {
+		if (G.__fr_last_req_id__ === message._reqId) return;
+		G.__fr_last_req_id__ = message._reqId;
+	}
+
+	switch (message.type) {
+		case 'start-custom':
+			if (message.options) {
+				logToPanel(t('Starting auto-routing...'));
+				pushLogToIFrame(t('Starting auto-routing...'), 'info');
+				const opts: RoutingOptions = {
+					maxPasses: message.options.maxPasses,
+					enableJlcPostprocess: message.options.enableJlcPostprocess ?? true,
+					routerSettings: message.options.routerSettings,
+				};
+				const autoDrc = message.options.autoDrc !== false;
+				if (!autoDrc) {
+					opts.skipDrc = true;
+				}
+				try {
+					await runRoute(opts, pushLogToIFrame, false);
+				} catch (error) {
+					unlock();
+					const msg = `${t('Error: ')}${error instanceof Error ? error.message : String(error)}`;
+					showError(msg);
+					logToPanel(msg, 'error');
+					pushLogToIFrame(msg, 'error');
+				}
+			}
+			break;
+		case 'stop':
+			stopRoute();
+			break;
+		case 'ping':
+			pushMessageToIFrame({ type: 'pong', _id: nextMessageId() });
+			break;
+	}
+}
+
 function ensureIframeSubscribed(): void {
 	if (G[SUB_KEY]) return;
 
+	let bound = false;
 	try {
-		eda.sys_MessageBus.subscribe('freerouting-iframe', async (message: { type: string; options?: RoutingOptions & { autoDrc?: boolean } }) => {
-			switch (message.type) {
-				case 'start-custom':
-					if (message.options) {
-						logToPanel(t('Starting auto-routing...'));
-						pushLogToIFrame(t('Starting auto-routing...'), 'info');
-						const opts: RoutingOptions = {
-							maxPasses: message.options.maxPasses,
-							enableJlcPostprocess: message.options.enableJlcPostprocess ?? true,
-							routerSettings: message.options.routerSettings,
-						};
-						const autoDrc = message.options.autoDrc !== false;
-						if (!autoDrc) {
-							opts.skipDrc = true;
-						}
-						try {
-							await runRoute(opts, pushLogToIFrame, false);
-						} catch (error) {
-							unlock();
-							const msg = `${t('Error: ')}${error instanceof Error ? error.message : String(error)}`;
-							showError(msg);
-							logToPanel(msg, 'error');
-							pushLogToIFrame(msg, 'error');
-						}
-					}
-					break;
-				case 'stop':
-					stopRoute();
-					break;
-			}
-		});
-		G[SUB_KEY] = true;
+		eda.sys_MessageBus.subscribe('freerouting-iframe', handleIframeMessage);
+		bound = true;
 	} catch (error) {
-		// 订阅失败时不置位，下次打开面板会重试
-		console.error('[FreeRouting] failed to subscribe custom iframe messages:', error);
+		console.error('[FreeRouting] failed to subscribe private iframe messages:', error);
 	}
+	try {
+		eda.sys_MessageBus.subscribePublic('freerouting-iframe-public', handleIframeMessage);
+		bound = true;
+	} catch (error) {
+		console.error('[FreeRouting] failed to subscribe public iframe messages:', error);
+	}
+	// 任一总线订阅成功即可，避免重复注册
+	if (bound) G[SUB_KEY] = true;
 }
 
 function showServiceNotFoundDialog(
