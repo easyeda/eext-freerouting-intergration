@@ -70,6 +70,7 @@
 	"Timed out while importing routing results": "Timed out while importing routing results",
 	"Timed out while running DRC": "Timed out while running DRC",
 	"Realtime status unavailable, progress may be inaccurate": "Realtime status unavailable, progress may be inaccurate",
+	"Auto-routing": "Auto-routing",
 	"Extension connected": "Extension connected",
 	"Extension not responding, please restart the client": "Extension not responding, please restart the client",
 	"External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry": "External interaction permission is not enabled. Please go to: Advanced -> Extension Manager -> FreeRouting -> Settings, enable \"Allow External Interaction\" and retry",
