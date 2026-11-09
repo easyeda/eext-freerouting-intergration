@@ -15,15 +15,28 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 16px 20px;
-            gap: 8px;
+            padding: 8px 14px;
+            gap: 5px;
         }
-        .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-        .title { font-size: 13px; font-weight: 600; color: #222; }
-        .percent { font-size: 18px; font-weight: 600; color: #007AFF; }
-        .message { font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .bar { width: 100%; height: 8px; background: #E0E0E0; border-radius: 4px; overflow: hidden; }
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .title { font-size: 12px; font-weight: 600; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .percent { font-size: 16px; font-weight: 600; color: #007AFF; white-space: nowrap; }
+        .bar { width: 100%; height: 6px; background: #E0E0E0; border-radius: 3px; overflow: hidden; }
         .fill { width: 0%; height: 100%; background: #007AFF; transition: width 0.3s ease; }
+        .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 20px; }
+        .message { flex: 1; font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stop {
+            flex: none;
+            padding: 2px 10px;
+            font-size: 11px;
+            line-height: 16px;
+            color: #FFF;
+            background: #FF3B30;
+            border: 1px solid #FF3B30;
+            cursor: pointer;
+        }
+        .stop:hover { background: #E0352B; border-color: #E0352B; }
+        .stop:disabled { opacity: 0.6; cursor: default; }
     </style>
 </head>
 <body>
@@ -32,13 +45,17 @@
         <span class="percent" id="percent">0%</span>
     </div>
     <div class="bar"><div class="fill" id="fill"></div></div>
-    <div class="message" id="message"></div>
+    <div class="bottom">
+        <span class="message" id="message"></span>
+        <button class="stop" id="stopBtn" onclick="stopRouting()">停止布线</button>
+    </div>
 
     <script>
     (function() {
         'use strict';
 
         var seen = {};
+        var sessionToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
 
         function getEdaCandidates() {
             var list = [];
@@ -52,6 +69,11 @@
             try { if (window.parent && window.parent.eda) add(window.parent.eda); } catch (e) {}
             try { if (window.top && window.top.eda) add(window.top.eda); } catch (e) {}
             return list;
+        }
+
+        function getEda() {
+            var list = getEdaCandidates();
+            return list.length ? list[0] : null;
         }
 
         function render(payload) {
@@ -121,6 +143,53 @@
                 } catch (e) {}
             }
         }
+
+        function sendToExtension(type, data) {
+            var payload = {
+                type: type,
+                _token: sessionToken,
+                _reqId: Date.now().toString(36) + Math.random().toString(36).slice(2)
+            };
+            if (data) {
+                for (var key in data) {
+                    if (Object.prototype.hasOwnProperty.call(data, key)) payload[key] = data[key];
+                }
+            }
+            var candidates = getEdaCandidates();
+            for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+                if (!candidate) continue;
+                if (candidate.sys_MessageBus) {
+                    try { candidate.sys_MessageBus.publish('freerouting-iframe', payload); } catch (e) {}
+                    try { candidate.sys_MessageBus.publishPublic('freerouting-iframe-public', payload); } catch (e) {}
+                }
+                if (candidate.sys_Storage) {
+                    try {
+                        var result = candidate.sys_Storage.setExtensionUserConfig('__fr_custom_cmd__', JSON.stringify(payload));
+                        if (result && result.catch) result.catch(function() {});
+                    } catch (e) {}
+                }
+            }
+        }
+
+        window.stopRouting = function() {
+            var btn = document.getElementById('stopBtn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            var eda = getEda();
+            var text = (eda && eda.sys_I18n && eda.sys_I18n.text('Stopping routing...')) || '正在停止布线...';
+            btn.textContent = text;
+            document.getElementById('message').textContent = text;
+            sendToExtension('stop', {});
+        };
+
+        (function initStopText() {
+            var eda = getEda();
+            if (eda && eda.sys_I18n) {
+                var label = eda.sys_I18n.text('stop_routing');
+                if (label) document.getElementById('stopBtn').textContent = label;
+            }
+        })();
 
         setInterval(function() {
             bindBus();

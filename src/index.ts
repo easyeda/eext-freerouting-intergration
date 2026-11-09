@@ -195,13 +195,17 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	// 显示值变成所有条目的平均值，最终卡在某个百分比。因此整个布线过程必须使用同一个 title。
 	const progressTitle = `${t('Auto-routing')} (v${extensionConfig.version})`;
 	if (showProgress) {
-		// 清空上一轮遗留的事件，避免新进度弹窗先显示旧的 66% 等历史值
+		// 直接布线也要启用 iframe 命令通道，进度弹窗上的“停止布线”才能生效
+		ensureIframeSubscribed();
+		// 清空上一轮遗留的命令/事件，避免旧 stop 命令立刻停掉本次布线
 		try {
+			await eda.sys_Storage.setExtensionUserConfig(CMD_KEY, '');
 			await eda.sys_Storage.setExtensionUserConfig(EVENTS_KEY, '[]');
 		} catch (_) {}
+		startStorageCommandPoll();
 		// 使用独立的进度弹窗，避免 EDA 共享进度组被其它导入/任务进度污染
 		try {
-			await eda.sys_IFrame.openIFrame('./iframe/progress.html', 420, 130, PROGRESS_IFRAME_ID, {
+			await eda.sys_IFrame.openIFrame('./iframe/progress.html', 420, 100, PROGRESS_IFRAME_ID, {
 				title: progressTitle,
 				buttonCallbackFn: (button: string) => {
 					if (button === 'close') stopRoute();
@@ -235,6 +239,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 				eda.sys_LoadingAndProgressBar.destroyProgressBar();
 				pushProgressToIFrame(result.success ? 100 : 96, result.success ? t('SES file imported') : t('Routing finished'));
 				setTimeout(closeProgressIFrame, 800);
+				stopStorageCommandPoll();
 			}
 			if (result.success) {
 				showSuccess(t('Auto-routing completed!'));
@@ -261,6 +266,7 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 			if (showProgress) {
 				eda.sys_LoadingAndProgressBar.destroyProgressBar();
 				closeProgressIFrame();
+				stopStorageCommandPoll();
 			}
 			const message = error.message || String(error);
 			if (message !== '布线已取消') {

@@ -258,4 +258,4 @@ export const POLL_INTERVAL = 2000;
 /**
  * 实时预览最小间隔 (毫秒)
  */
-export const PREVIEW_INTERVAL = 6000;
+export const PREVIEW_INTERVAL = 10000;
