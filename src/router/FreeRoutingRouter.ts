@@ -11,8 +11,6 @@ import { t } from '../utils/toast';
 export type ProgressCallback = (progress: RoutingProgress) => void;
 export type LogCallback = (message: string, level: string) => void;
 
-/** 真实进度不变时的爬升间隔 (毫秒) */
-const CREEP_INTERVAL = 3000;
 /** 查询任务状态的最长等待时间 (毫秒) */
 const STATUS_TIMEOUT = 10000;
 /** 本地请求/文件处理的最长等待时间 (毫秒) */
@@ -215,11 +213,12 @@ export class FreeRoutingRouter {
 			let lastUnrouted: number | null = null;
 			let lastMessage = '';
 			let lastPreviewTime = 0;
-			let lastAdvanceTime = Date.now();
 			let total = totalConnections > 0 ? totalConnections : 0;
 			let seenUnrouted = false;
 			let nextDelay = POLL_INTERVAL;
 			let compactWarned = false;
+			let useCompact = true;
+			const progressStartedAt = Date.now();
 
 			const poll = async () => {
 				if (this.cancelled) {
@@ -229,18 +228,27 @@ export class FreeRoutingRouter {
 
 				try {
 					let status: JobResponse;
-					try {
-						status = await withTimeout(
-							FreeRoutingAPI.getJobStatusCompact(jobId),
-							STATUS_TIMEOUT,
-							t('Timed out while fetching routing status'),
-						);
-					} catch (compactError) {
-						// compact 查询不可用时回退完整状态，至少保证能检测到任务完成
-						if (!compactWarned) {
-							compactWarned = true;
-							this.onLog?.(t('Realtime status unavailable, progress may be inaccurate'), 'warn');
+					if (useCompact) {
+						try {
+							status = await withTimeout(
+								FreeRoutingAPI.getJobStatusCompact(jobId),
+								STATUS_TIMEOUT,
+								t('Timed out while fetching routing status'),
+							);
+						} catch (compactError) {
+							// compact 查询不可用（例如服务端 500）时，后续直接使用完整状态
+							useCompact = false;
+							if (!compactWarned) {
+								compactWarned = true;
+								this.onLog?.(t('Realtime status unavailable, progress may be inaccurate'), 'warn');
+							}
+							status = await withTimeout(
+								FreeRoutingAPI.getJobStatus(jobId),
+								STATUS_TIMEOUT,
+								t('Timed out while fetching routing status'),
+							);
 						}
+					} else {
 						status = await withTimeout(FreeRoutingAPI.getJobStatus(jobId), STATUS_TIMEOUT, t('Timed out while fetching routing status'));
 					}
 
@@ -273,8 +281,7 @@ export class FreeRoutingRouter {
 
 					if (incomplete != null && incomplete > 0) seenUnrouted = true;
 					if (total <= 0 && incomplete != null && incomplete > 0) total = incomplete;
-					// 首个采样越早，基准越接近真实总连接数
-					nextDelay = total > 0 && incomplete != null ? POLL_INTERVAL : 500;
+					nextDelay = POLL_INTERVAL;
 
 					const stageMap: Record<string, string> = {
 						'IDLE': t('Idle'),
@@ -289,35 +296,26 @@ export class FreeRoutingRouter {
 					const unroutedText = incomplete != null && total > 0 ? `${t(' | unrouted ')}${incomplete}${t(' / ')}${total}` : '';
 
 					let ceiling = 90;
-					let target = this.lastPercentage;
+					let realTarget: number | null = null;
 					const statsReady = total > 0 && incomplete != null && (incomplete > 0 || seenUnrouted);
 
 					if (stageKey === 'ROUTING' || stageKey === 'FANOUT') {
 						ceiling = 90;
 						if (statsReady) {
 							const routedFraction = Math.min(1, Math.max(0, (total - (incomplete as number)) / total));
-							target = 5 + routedFraction * 85;
-						} else if (maxPasses > 1) {
-							target = 5 + Math.min(1, currentPass / maxPasses) * 85;
+							realTarget = 5 + routedFraction * 85;
 						}
 					} else if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
 						ceiling = 96;
-						target = Math.max(this.lastPercentage, 90);
-					} else if (status.state === 'RUNNING' && maxPasses > 1) {
-						ceiling = 90;
-						target = 5 + Math.min(1, currentPass / maxPasses) * 85;
+						if (statsReady && incomplete === 0) realTarget = 90;
 					}
 
-					// 只增不减；真实进度暂时不变时缓慢爬升，避免长时间看起来卡死
+					// 没有实时统计（compact 查询失败）时按每分钟 2% 平滑推进，避免瞬间跳到某个百分比后停住
 					const now = Date.now();
-					if (target > this.lastPercentage) {
-						this.lastPercentage = Math.min(ceiling, target);
-						lastAdvanceTime = now;
-					} else if (this.lastPercentage < ceiling && status.state === 'RUNNING' && now - lastAdvanceTime >= CREEP_INTERVAL) {
-						const step = Math.max(0.2, (ceiling - this.lastPercentage) * 0.02);
-						this.lastPercentage = Math.min(ceiling, this.lastPercentage + step);
-						lastAdvanceTime = now;
-					}
+					const elapsedMinutes = (now - progressStartedAt) / 60000;
+					const timeTarget = Math.min(ceiling, elapsedMinutes * 2);
+					const target = Math.max(timeTarget, realTarget ?? 0);
+					this.lastPercentage = Math.min(ceiling, Math.max(this.lastPercentage, target));
 
 					const percentage = Math.min(99, Math.round(this.lastPercentage));
 					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
