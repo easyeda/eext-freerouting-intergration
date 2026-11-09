@@ -160,6 +160,16 @@ export interface JobResponse {
 }
 
 /**
+ * 任务日志条目
+ */
+export interface JobLogEntry {
+	timestamp?: string;
+	type?: string;
+	message?: string;
+	topic?: string;
+}
+
+/**
  * 任务输出响应
  */
 export interface JobOutputResponse {

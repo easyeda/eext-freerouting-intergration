@@ -1,7 +1,7 @@
 /**
  * FreeRouting REST API 客户端
  */
-import { API_BASE_URL, JobOutputResponse, JobResponse, RouterSettings, SessionResponse, SystemStatusResponse } from '../types';
+import { API_BASE_URL, JobLogEntry, JobOutputResponse, JobResponse, RouterSettings, SessionResponse, SystemStatusResponse } from '../types';
 
 async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
 	const url = `${API_BASE_URL}${path}`;
@@ -85,6 +85,14 @@ export class FreeRoutingAPI {
 	 */
 	static getJobStatusCompact(jobId: string): Promise<JobResponse> {
 		return request('GET', `/jobs/${jobId}?compact=true`);
+	}
+
+	/**
+	 * 获取任务日志
+	 * 用于 compact 状态接口不可用时，从每轮日志中解析真实未布通数量
+	 */
+	static getJobLogs(jobId: string): Promise<JobLogEntry[]> {
+		return request('GET', `/jobs/${jobId}/logs`);
 	}
 
 	static getJobOutput(jobId: string): Promise<JobOutputResponse> {

@@ -19,6 +19,10 @@ const REQUEST_TIMEOUT = 60000;
 const RESULT_TIMEOUT = 30000;
 /** 导入 SES / 执行 DRC 的最长等待时间 (毫秒) */
 const IMPORT_TIMEOUT = 120000;
+/** compact 不可用时，拉取任务日志的间隔 (毫秒) */
+const LOGS_INTERVAL = 10000;
+/** 拉取任务日志的超时时间 (毫秒) */
+const LOGS_TIMEOUT = 5000;
 
 function withTimeout<T>(promise: Promise<T>, timeout: number, message: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -217,7 +221,11 @@ export class FreeRoutingRouter {
 			let seenUnrouted = false;
 			let nextDelay = POLL_INTERVAL;
 			let compactWarned = false;
-			let useCompact = true;
+			// compact 接口在部分板子/版本上会 500，本次会话内一旦失败就不再尝试
+			let useCompact = !(globalThis as any).__fr_compact_disabled__;
+			let lastLogsTime = 0;
+			let logBaseline = 0;
+			let logUnrouted: number | null = null;
 			const progressStartedAt = Date.now();
 
 			const poll = async () => {
@@ -238,6 +246,7 @@ export class FreeRoutingRouter {
 						} catch (compactError) {
 							// compact 查询不可用（例如服务端 500）时，后续直接使用完整状态
 							useCompact = false;
+							(globalThis as any).__fr_compact_disabled__ = true;
 							if (!compactWarned) {
 								compactWarned = true;
 								this.onLog?.(t('Realtime status unavailable, progress may be inaccurate'), 'warn');
@@ -273,14 +282,52 @@ export class FreeRoutingRouter {
 					const stageKey = (status.stage || '').toUpperCase();
 					const currentStage = `${stageKey}_${status.state}`;
 					const currentPass = status.current_pass || 0;
+					const now = Date.now();
+
+					// compact 不可用时，从任务日志中解析真实未布通数量
+					if (!useCompact && now - lastLogsTime >= LOGS_INTERVAL) {
+						lastLogsTime = now;
+						try {
+							const entries = await withTimeout(FreeRoutingAPI.getJobLogs(jobId), LOGS_TIMEOUT, 'logs timeout');
+							const messages = (entries || []).map((entry) => entry.message || '').filter(Boolean);
+							if (logBaseline <= 0) {
+								for (const msg of messages) {
+									const baselineMatch = msg.match(/Auto-routing stage started[\s\S]*?for (\d+) unrouted items/i);
+									if (baselineMatch) {
+										logBaseline = parseInt(baselineMatch[1], 10);
+										break;
+									}
+								}
+							}
+							for (let i = messages.length - 1; i >= 0; i--) {
+								const passMatch = messages[i].match(/Auto-routing pass #\d+[\s\S]*?\((\d+) unrouted/i);
+								if (passMatch) {
+									logUnrouted = parseInt(passMatch[1], 10);
+									break;
+								}
+							}
+						} catch (logError) {
+							console.warn('[FreeRouting] failed to read job logs:', logError);
+						}
+					}
+
 					const incomplete =
 						status.statistics?.unrouted_connections ??
 						status.input?.statistics?.connections?.incompleteCount ??
 						status.input?.statistics?.connections?.incomplete_count ??
 						null;
 
-					if (incomplete != null && incomplete > 0) seenUnrouted = true;
 					if (total <= 0 && incomplete != null && incomplete > 0) total = incomplete;
+
+					let effectiveTotal = total;
+					let effectiveIncomplete = incomplete;
+					if ((effectiveIncomplete == null || effectiveTotal <= 0) && logBaseline > 0) {
+						effectiveTotal = logBaseline;
+						effectiveIncomplete = logUnrouted ?? logBaseline;
+					}
+
+					if (effectiveIncomplete != null && effectiveIncomplete > 0) seenUnrouted = true;
+					if (effectiveTotal <= 0 && effectiveIncomplete != null && effectiveIncomplete > 0) effectiveTotal = effectiveIncomplete;
 					nextDelay = POLL_INTERVAL;
 
 					const stageMap: Record<string, string> = {
@@ -293,25 +340,27 @@ export class FreeRoutingRouter {
 					};
 					const stageText = stageMap[stageKey] || status.stage || status.state;
 					const passText = t('Routing: Pass ');
-					const unroutedText = incomplete != null && total > 0 ? `${t(' | unrouted ')}${incomplete}${t(' / ')}${total}` : '';
+					const unroutedText =
+						effectiveIncomplete != null && effectiveTotal > 0
+							? `${t(' | unrouted ')}${effectiveIncomplete}${t(' / ')}${effectiveTotal}`
+							: '';
 
 					let ceiling = 90;
 					let realTarget: number | null = null;
-					const statsReady = total > 0 && incomplete != null && (incomplete > 0 || seenUnrouted);
+					const statsReady = effectiveTotal > 0 && effectiveIncomplete != null && (effectiveIncomplete > 0 || seenUnrouted);
 
 					if (stageKey === 'ROUTING' || stageKey === 'FANOUT') {
 						ceiling = 90;
 						if (statsReady) {
-							const routedFraction = Math.min(1, Math.max(0, (total - (incomplete as number)) / total));
+							const routedFraction = Math.min(1, Math.max(0, (effectiveTotal - (effectiveIncomplete as number)) / effectiveTotal));
 							realTarget = 5 + routedFraction * 85;
 						}
 					} else if (stageKey === 'OPTIMIZATION' || stageKey === 'OPTIMIZING' || stageKey === 'POSTPROCESSING') {
 						ceiling = 96;
-						if (statsReady && incomplete === 0) realTarget = 90;
+						if (statsReady && effectiveIncomplete === 0) realTarget = 90;
 					}
 
 					// 没有实时统计（compact 查询失败）时按每分钟 2% 平滑推进，避免瞬间跳到某个百分比后停住
-					const now = Date.now();
 					const elapsedMinutes = (now - progressStartedAt) / 60000;
 					const timeTarget = Math.min(ceiling, elapsedMinutes * 2);
 					const target = Math.max(timeTarget, realTarget ?? 0);
@@ -319,13 +368,13 @@ export class FreeRoutingRouter {
 
 					const percentage = Math.min(99, Math.round(this.lastPercentage));
 					const message = `${stageText}: ${passText}${currentPass}${t(' / ')}${maxPasses}${unroutedText} (${percentage}%)`;
-					const changed = currentStage !== lastStage || currentPass !== lastPass || incomplete !== lastUnrouted;
+					const changed = currentStage !== lastStage || currentPass !== lastPass || effectiveIncomplete !== lastUnrouted;
 					if (changed || message !== lastMessage) {
 						if (changed) this.onLog?.(message, 'info');
 						this.onProgress?.({ stage: stageText, percentage, message });
 						lastStage = currentStage;
 						lastPass = currentPass;
-						lastUnrouted = incomplete;
+						lastUnrouted = effectiveIncomplete;
 						lastMessage = message;
 					}
 
@@ -346,9 +395,9 @@ export class FreeRoutingRouter {
 						} catch (previewErr) {
 							console.warn('[FreeRouting] preview failed:', previewErr);
 						}
-						if (total > 0 && incomplete != null) {
-							const routed = Math.max(0, total - incomplete);
-							this.onLog?.(`${t('[Preview] routed: ')}${routed}/${total}${t(' | unrouted: ')}${incomplete}`, 'info');
+						if (effectiveTotal > 0 && effectiveIncomplete != null) {
+							const routed = Math.max(0, effectiveTotal - effectiveIncomplete);
+							this.onLog?.(`${t('[Preview] routed: ')}${routed}/${effectiveTotal}${t(' | unrouted: ')}${effectiveIncomplete}`, 'info');
 						}
 					}
 				} catch (error) {
