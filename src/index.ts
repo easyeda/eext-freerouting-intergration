@@ -132,11 +132,11 @@ async function runRoute(options: RoutingOptions, logFn?: (msg: string, level: st
 	routeStartTime = Date.now();
 	logToPanel(`${t('Routing started')} (v${extensionConfig.version}) - ${new Date(routeStartTime).toLocaleTimeString()}`);
 
-	if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(0, t('Starting auto-routing...'));
+	if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(0, `${t('Starting auto-routing...')} (v${extensionConfig.version})`);
 
 	const router = new FreeRoutingRouter(
 		(progress) => {
-			if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, progress.message);
+			if (showProgress) eda.sys_LoadingAndProgressBar.showProgressBar(progress.percentage, `${progress.message} (v${extensionConfig.version})`);
 		},
 		(message, level) => {
 			console.log(`[FreeRouting] [${level}] ${message}`);
